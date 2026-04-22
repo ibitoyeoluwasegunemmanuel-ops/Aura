@@ -549,6 +549,7 @@ Be genuinely helpful, use emojis naturally, keep responses focused.`;
     r.onerror = () => setWakeOn(false);
     wakeRef.current = r;
     try { r.start(); } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auraName]);
 
   useEffect(() => { startWake(); return () => wakeRef.current?.stop(); }, [startWake]);
@@ -801,7 +802,7 @@ function NavigateScreen({ auraName }) {
       callClaude([{ role: "user", content: `Short travel tip for "${dest}". 1-2 sentences, friendly.` }]),
       callClaude([{ role: "user", content: `5 turn-by-turn directions to "${dest}"${loc ? ` from ${loc.lat},${loc.lng}` : ""}. Number each. Short.` }]),
     ]);
-    setTip(t); setSteps(d.split("\n").filter(l => l.match(/^\d+[\.\)]/)).slice(0, 5));
+    setTip(t); setSteps(d.split("\n").filter(l => l.match(/^\d+[.)]/)).slice(0, 5));
     setRouted(true); setLoading(false); speak(`Route to ${dest} ready. ${t}`);
   };
 
@@ -845,7 +846,7 @@ function NavigateScreen({ auraName }) {
       {steps.length > 0 && <Card><Lbl color={C.cyan}>Turn-by-Turn Directions</Lbl>
         {steps.map((s, i) => <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderBottom: i < steps.length - 1 ? `1px solid ${C.border}` : "none" }}>
           <div style={{ width: 20, height: 20, borderRadius: "50%", background: i === 0 ? `${C.green}22` : `${C.cyan}11`, border: `1px solid ${i === 0 ? C.green + "44" : C.cyan + "22"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: i === 0 ? C.green : C.cyan, flexShrink: 0 }}>{i + 1}</div>
-          <div style={{ fontSize: 11, color: i === 0 ? "#fff" : "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>{s.replace(/^\d+[\.\)]\s*/, "")}</div>
+          <div style={{ fontSize: 11, color: i === 0 ? "#fff" : "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>{s.replace(/^\d+[.)]\s*/, "")}</div>
         </div>)}
       </Card>}
       {tip && <Card color={C.gold}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.7 }}><span style={{ color: C.gold, fontWeight: 700 }}>{auraName}:</span> {tip}</div></Card>}
