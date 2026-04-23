@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { C } from "../theme/colors";
-import { Card, Btn, Lbl, Inp } from "../components/ui";
+import { Card, Btn, Lbl } from "../components/ui";
 import { callClaude, genImg } from "../utils/api";
 import { speakFull } from "../utils/voice";
 
