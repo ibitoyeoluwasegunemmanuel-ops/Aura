@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { C } from "./theme/colors";
+import { CSS } from "./theme/css";
+import { Card, Btn, Tag, Lbl, Inp } from "./components/ui";
+import { FOUNDER_SYSTEM_BLOCK } from "./data/founder";
 
 // ── CLAUDE API (proxied via /api/claude to keep key server-side) ──────────────
 async function callClaude(messages, system = "", maxTokens = 1024) {
@@ -20,28 +24,44 @@ const genImg = (prompt, seed = Date.now()) =>
   `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&nologo=true&seed=${seed}`;
 
 // ── TEXT TO SPEECH ────────────────────────────────────────────────────────────
+function getVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  return voices.find(x => x.name.includes("Google") && x.lang.startsWith("en"))
+      || voices.find(x => x.lang.startsWith("en"));
+}
+
 function speak(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text.replace(/[*#`[\]]/g, "").slice(0, 300));
+  const clean = text.replace(/[*#`[\]]/g, "").trim();
+  const u = new SpeechSynthesisUtterance(clean.slice(0, 300));
   u.rate = 1.05; u.pitch = 1.1;
-  const voices = window.speechSynthesis.getVoices();
-  const v = voices.find(x => x.name.includes("Google") && x.lang.startsWith("en")) || voices.find(x => x.lang.startsWith("en"));
-  if (v) u.voice = v;
+  const v = getVoice(); if (v) u.voice = v;
   window.speechSynthesis.speak(u);
+}
+
+// Speaks the full text with no character limit by chaining sentences
+function speakFull(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/[*#`[\]]/g, "").trim();
+  const sentences = clean.match(/[^.!?\n]+[.!?\n]*/g) || [clean];
+  let i = 0;
+  const next = () => {
+    if (i >= sentences.length) return;
+    const u = new SpeechSynthesisUtterance(sentences[i].trim());
+    u.rate = 1.05; u.pitch = 1.1;
+    const v = getVoice(); if (v) u.voice = v;
+    u.onend = () => { i++; next(); };
+    window.speechSynthesis.speak(u);
+  };
+  next();
 }
 
 // ── LOCAL STORAGE ─────────────────────────────────────────────────────────────
 const sto = {
   get: (k, d) => { try { return JSON.parse(localStorage.getItem("aura_" + k)) ?? d; } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem("aura_" + k, JSON.stringify(v)); } catch {} },
-};
-
-// ── DESIGN PALETTE ────────────────────────────────────────────────────────────
-const C = {
-  bg: "#02020a", cyan: "#00ffe5", purple: "#7b2ff7", orange: "#ff6b2b",
-  gold: "#ffd700", green: "#39ff85", red: "#ff3355", pink: "#ff4dff",
-  blue: "#00c8ff", card: "rgba(255,255,255,0.028)", border: "rgba(255,255,255,0.07)",
 };
 
 // ── LANGUAGES ─────────────────────────────────────────────────────────────────
@@ -53,43 +73,6 @@ const LANGS = [
   "Vietnamese","Thai","Tagalog","Malay","Indonesian","Persian","Urdu",
   "Dutch","Polish","Ukrainian","Romanian","Greek","Hebrew","Swedish","Finnish","Afrikaans",
 ];
-
-// ── UI ATOMS ──────────────────────────────────────────────────────────────────
-const Card = ({ children, color, style = {} }) => (
-  <div style={{ background: color ? `${color}08` : C.card, border: `1px solid ${color ? color + "22" : C.border}`, borderRadius: 14, padding: 14, ...style }}>
-    {children}
-  </div>
-);
-
-const Btn = ({ children, color, onClick, style = {}, small, outline, disabled }) => (
-  <button disabled={disabled} onClick={onClick} style={{
-    padding: small ? "7px 13px" : "11px 20px",
-    background: outline ? "transparent" : `linear-gradient(135deg,${color || C.cyan},${color ? color + "bb" : C.purple})`,
-    border: outline ? `1px solid ${color || C.cyan}55` : "none",
-    borderRadius: 10, color: outline ? (color || C.cyan) : "#000",
-    fontSize: small ? 11 : 13, fontWeight: 700, cursor: disabled ? "default" : "pointer",
-    fontFamily: "'DM Mono',monospace", letterSpacing: 0.5,
-    opacity: disabled ? 0.4 : 1, transition: "all 0.2s",
-    boxShadow: outline ? "none" : `0 0 16px ${color || C.cyan}22`, ...style,
-  }}>{children}</button>
-);
-
-const Tag = ({ c, children }) => (
-  <span style={{ background: `${c}15`, border: `1px solid ${c}33`, borderRadius: 20, padding: "2px 8px", fontSize: 9, color: c, letterSpacing: 1 }}>
-    {children}
-  </span>
-);
-
-const Lbl = ({ children, color }) => (
-  <div style={{ fontSize: 8, letterSpacing: 5, color: color || "rgba(255,255,255,0.2)", textTransform: "uppercase", marginBottom: 10 }}>
-    {children}
-  </div>
-);
-
-const Inp = ({ value, onChange, placeholder, type = "text", onKeyDown, style = {} }) => (
-  <input type={type} value={value} onChange={onChange} onKeyDown={onKeyDown} placeholder={placeholder}
-    style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 13px", color: "#fff", fontSize: 12, fontFamily: "'DM Mono',monospace", outline: "none", width: "100%", ...style }} />
-);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ADMIN GATE
@@ -517,8 +500,19 @@ function ChatScreen({ auraName }) {
   const [copied, setCopied] = useState(null);
   const endRef = useRef();
   const wakeRef = useRef();
+  const listeningRef = useRef(false);
 
-  const SYSTEM = `You are ${auraName}, a genius personal AI OS powered by Claude. You're warm, sharp, like a brilliant best friend.
+  const userProfile = sto.get("user_profile", null);
+
+  const SYSTEM = `You are ${auraName}, a genius personal AI OS. You are warm, sharp, like a brilliant best friend.
+${FOUNDER_SYSTEM_BLOCK}
+${userProfile ? `
+USER PROFILE — remember this always:
+  Name: ${userProfile.name || "not set"}
+  Role: ${userProfile.role || "not set"}
+  Preferences: ${userProfile.preferences || "none"}
+  Active Projects: ${userProfile.projects || "none"}
+Address the user by name when you know it. Personalize every response to their context.` : ""}
 
 Special commands — add these on their own line when relevant:
 [IMAGE: detailed description] — when asked to generate/create/show an image
@@ -541,12 +535,19 @@ Be genuinely helpful, use emojis naturally, keep responses focused.`;
     if (!SR) return;
     const r = new SR(); r.continuous = true; r.interimResults = true; r.lang = "en-US";
     r.onstart = () => setWakeOn(true);
-    r.onend = () => { setWakeOn(false); setTimeout(startWake, 3000); };
+    r.onend = () => {
+      setWakeOn(false);
+      if (!listeningRef.current) setTimeout(startWake, 600);
+    };
     r.onresult = (e) => {
       const t = Array.from(e.results).map(x => x[0].transcript).join("").toLowerCase();
-      if (t.includes(`hey ${auraName.toLowerCase()}`)) { r.stop(); setTimeout(startVoice, 400); }
+      const name = auraName.toLowerCase();
+      if (t.includes(`hey ${name}`) || t.includes(name)) { r.stop(); setTimeout(startVoice, 400); }
     };
-    r.onerror = () => setWakeOn(false);
+    r.onerror = (e) => {
+      setWakeOn(false);
+      if (e.error !== "aborted" && !listeningRef.current) setTimeout(startWake, 800);
+    };
     wakeRef.current = r;
     try { r.start(); } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -558,11 +559,16 @@ Be genuinely helpful, use emojis naturally, keep responses focused.`;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert("Voice requires Chrome browser"); return; }
     wakeRef.current?.stop();
+    listeningRef.current = true;
     const r = new SR(); r.lang = "en-US"; r.interimResults = false;
     r.onstart = () => setListening(true);
-    r.onend = () => { setListening(false); setTimeout(startWake, 1000); };
+    r.onend = () => {
+      setListening(false);
+      listeningRef.current = false;
+      setTimeout(startWake, 600);
+    };
     r.onresult = (e) => send(e.results[0][0].transcript);
-    r.onerror = () => setListening(false);
+    r.onerror = () => { setListening(false); listeningRef.current = false; };
     try { r.start(); } catch {}
   };
 
@@ -609,9 +615,14 @@ Be genuinely helpful, use emojis naturally, keep responses focused.`;
         out.push({ role: "assistant", type: "text", content: reply });
       }
 
-      setMsgs(m => [...m, ...out]);
+      setMsgs(m => {
+        const next = [...m, ...out];
+        const plain = next.filter(x => x.type === "text").map(x => ({ role: x.role, content: x.content })).slice(-20);
+        sto.set("chat_history", plain);
+        return next;
+      });
       const firstText = out.find(r => r.type === "text");
-      if (firstText) speak(firstText.content);
+      if (firstText) speakFull(firstText.content);
     } catch (e) {
       setMsgs(m => [...m, { role: "assistant", type: "text", content: `Connection issue: ${e.message}` }]);
     }
@@ -629,7 +640,7 @@ Be genuinely helpful, use emojis naturally, keep responses focused.`;
       <div style={{ padding: "5px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: wakeOn ? C.green : C.border, boxShadow: wakeOn ? `0 0 8px ${C.green}` : "none", animation: wakeOn ? "pulse 1.5s infinite" : "none" }} />
         <span style={{ fontSize: 8, color: "rgba(255,255,255,0.18)", letterSpacing: 2, flex: 1 }}>{wakeOn ? `WAKE WORD ACTIVE — SAY "HEY ${auraName.toUpperCase()}"` : "WAKE WORD STANDBY"}</span>
-        <button onClick={() => speak(`Hey! I'm ${auraName}. Ready.`)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 11 }}>🔊</button>
+        <button onClick={() => speakFull(`Hey! I'm ${auraName}. Ready.`)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 11 }}>🔊</button>
       </div>
 
       {msgs.length <= 1 && (
@@ -655,7 +666,7 @@ Be genuinely helpful, use emojis naturally, keep responses focused.`;
                       <button onClick={() => copyMsg(m.content, i)} style={{ background: copied === i ? `${C.green}20` : "rgba(255,255,255,0.04)", border: `1px solid ${copied === i ? C.green + "44" : C.border}`, borderRadius: 7, padding: "4px 10px", cursor: "pointer", fontSize: 10, color: copied === i ? C.green : "rgba(255,255,255,0.35)" }}>
                         {copied === i ? "✓ Copied" : "⧉ Copy"}
                       </button>
-                      <button onClick={() => speak(m.content)} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 7, padding: "4px 8px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>🔊</button>
+                      <button onClick={() => speakFull(m.content)} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 7, padding: "4px 8px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>🔊</button>
                     </div>
                   )}
                 </>
@@ -861,7 +872,25 @@ function NavigateScreen({ auraName }) {
 function SettingsScreen({ auraName, onNameChange }) {
   const [name, setName] = useState(auraName);
   const [saved, setSaved] = useState(false);
+  const [profile, setProfile] = useState(() => sto.get("user_profile", { name: "", role: "", preferences: "", projects: "" }));
+  const [profSaved, setProfSaved] = useState(false);
+  const [cleared, setCleared] = useState(false);
   const NAMES = ["AURA", "JARVIS", "NOVA", "ZARA", "APEX", "IRIS", "NEXUS", "ARIA", "ZEUS", "LUNA"];
+
+  const saveProfile = () => {
+    sto.set("user_profile", profile);
+    setProfSaved(true);
+    speakFull(`Got it${profile.name ? `, ${profile.name}` : ""}. I'll remember you.`);
+    setTimeout(() => setProfSaved(false), 2500);
+  };
+
+  const clearMemory = () => {
+    sto.set("user_profile", { name: "", role: "", preferences: "", projects: "" });
+    sto.set("chat_history", []);
+    setProfile({ name: "", role: "", preferences: "", projects: "" });
+    setCleared(true);
+    setTimeout(() => setCleared(false), 2000);
+  };
 
   return (
     <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12, height: "100%", overflowY: "auto" }}>
@@ -873,9 +902,55 @@ function SettingsScreen({ auraName, onNameChange }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
           {NAMES.map(n => <div key={n} onClick={() => setName(n)} style={{ padding: "3px 10px", borderRadius: 20, background: name === n ? `${C.cyan}20` : "rgba(255,255,255,0.03)", border: `1px solid ${name === n ? C.cyan + "55" : C.border}`, fontSize: 10, color: name === n ? C.cyan : "rgba(255,255,255,0.35)", cursor: "pointer" }}>{n}</div>)}
         </div>
-        <Btn color={C.cyan} onClick={() => { onNameChange(name); setSaved(true); speak(`My name is ${name}. Ready!`); setTimeout(() => setSaved(false), 2500); }} style={{ width: "100%" }}>
+        <Btn color={C.cyan} onClick={() => { onNameChange(name); setSaved(true); speakFull(`My name is ${name}. Ready!`); setTimeout(() => setSaved(false), 2500); }} style={{ width: "100%" }}>
           {saved ? `✓ Saved! Say "Hey ${name}"` : "Save Name"}
         </Btn>
+      </Card>
+
+      {/* ── MEMORY SYSTEM ── */}
+      <Card color={C.gold}>
+        <Lbl color={C.gold}>🧠 Memory — What AURA Knows About You</Lbl>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 12, lineHeight: 1.6 }}>
+          Stored permanently. AURA injects this into every conversation so it always knows who you are.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <div>
+            <div style={{ fontSize: 9, color: C.gold, letterSpacing: 3, marginBottom: 5, textTransform: "uppercase" }}>Your Name</div>
+            <Inp value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} placeholder="e.g. CEO Global / Ibitoye..." />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: C.gold, letterSpacing: 3, marginBottom: 5, textTransform: "uppercase" }}>Your Role</div>
+            <Inp value={profile.role} onChange={e => setProfile(p => ({ ...p, role: e.target.value }))} placeholder="e.g. Founder & CEO of AURA..." />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: C.gold, letterSpacing: 3, marginBottom: 5, textTransform: "uppercase" }}>Preferences</div>
+            <textarea value={profile.preferences} onChange={e => setProfile(p => ({ ...p, preferences: e.target.value }))}
+              placeholder="e.g. Speak concisely, mix Yoruba sometimes, always address me as CEO Global..."
+              style={{ background: "rgba(255,255,255,0.04)", border: `1px solid rgba(255,215,0,0.2)`, borderRadius: 10, padding: "10px 13px", color: "#fff", fontSize: 11, fontFamily: "'DM Mono',monospace", resize: "none", outline: "none", width: "100%", height: 60, lineHeight: 1.5 }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: C.gold, letterSpacing: 3, marginBottom: 5, textTransform: "uppercase" }}>Active Projects</div>
+            <textarea value={profile.projects} onChange={e => setProfile(p => ({ ...p, projects: e.target.value }))}
+              placeholder="e.g. AURA OS, Sell Live app, Nigerian fintech platform..."
+              style={{ background: "rgba(255,255,255,0.04)", border: `1px solid rgba(255,215,0,0.2)`, borderRadius: 10, padding: "10px 13px", color: "#fff", fontSize: 11, fontFamily: "'DM Mono',monospace", resize: "none", outline: "none", width: "100%", height: 54, lineHeight: 1.5 }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <Btn color={C.gold} onClick={saveProfile} style={{ flex: 1 }}>
+            {profSaved ? "✓ Memory Saved!" : "💾 Save Memory"}
+          </Btn>
+          <Btn color={C.red} outline small onClick={clearMemory}>
+            {cleared ? "✓ Cleared" : "🗑 Clear All"}
+          </Btn>
+        </div>
+        {(profile.name || profile.role) && (
+          <div style={{ marginTop: 12, padding: "10px 12px", background: `${C.gold}08`, border: `1px solid ${C.gold}22`, borderRadius: 10 }}>
+            <div style={{ fontSize: 9, color: C.gold, letterSpacing: 2, marginBottom: 6 }}>AURA CURRENTLY KNOWS:</div>
+            {profile.name && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginBottom: 3 }}>👤 {profile.name}</div>}
+            {profile.role && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginBottom: 3 }}>💼 {profile.role}</div>}
+            {profile.projects && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)" }}>🚀 {profile.projects.slice(0, 60)}{profile.projects.length > 60 ? "..." : ""}</div>}
+          </div>
+        )}
       </Card>
       <Card color={C.purple}>
         <Lbl color={C.purple}>Deploy & Host AURA OS</Lbl>
@@ -923,19 +998,6 @@ const NAV = [
   { id: "settings", icon: "⚙", label: "Settings" },
 ];
 
-const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Orbitron:wght@700;900&family=Exo+2:wght@300;400;600;800&display=swap');
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.38}}
-  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-  @keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-  @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
-  *{box-sizing:border-box;margin:0;padding:0;}
-  html,body{height:100%;overflow:hidden;}
-  ::-webkit-scrollbar{width:3px;background:transparent;}
-  ::-webkit-scrollbar-thumb{background:rgba(0,255,229,0.12);border-radius:3px;}
-  textarea::placeholder,input::placeholder{color:rgba(255,255,255,0.18);}
-  select option{background:#111;color:#fff;}
-`;
 
 export default function AuraOS() {
   const [tab, setTab] = useState("chat");
