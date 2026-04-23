@@ -2,33 +2,45 @@ import { useState, useEffect } from "react";
 import { C }   from "./theme/colors";
 import { CSS }  from "./theme/css";
 import { sto }  from "./utils/storage";
+import { auth } from "./utils/auth";
+import AuthScreen      from "./screens/AuthScreen";
 import AdminDashboard  from "./screens/AdminDashboard";
 import ChatScreen      from "./screens/ChatScreen";
 import DesignScreen    from "./screens/DesignScreen";
+import AutomateScreen  from "./screens/AutomateScreen";
 import TranslateScreen from "./screens/TranslateScreen";
-import NavigateScreen  from "./screens/NavigateScreen";
 import SettingsScreen  from "./screens/SettingsScreen";
 
 const NAV = [
-  { id: "chat",      icon: "◈",  label: "AURA"      },
-  { id: "design",    icon: "✦",  label: "Design"    },
+  { id: "chat",      icon: "◈",  label: "AURA"     },
+  { id: "automate",  icon: "⚡",  label: "Automate" },
+  { id: "design",    icon: "✦",  label: "Design"   },
   { id: "translate", icon: "🌍", label: "Translate" },
-  { id: "nav",       icon: "🗺️", label: "Navigate"  },
-  { id: "settings",  icon: "⚙",  label: "Settings"  },
+  { id: "settings",  icon: "⚙",  label: "Settings" },
 ];
 
 export default function AuraOS() {
-  const [tab, setTab]           = useState("chat");
-  const [auraName, setAuraName] = useState(() => sto.get("aura_name", "AURA"));
+  const [session, setSession]     = useState(() => auth.getSession());
+  const [tab, setTab]             = useState("chat");
+  const [auraName, setAuraName]   = useState(() => sto.get("aura_name", "AURA"));
   const [showAdmin, setShowAdmin] = useState(false);
-  const [time, setTime]         = useState(new Date());
+  const [time, setTime]           = useState(new Date());
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const handleName = n => { setAuraName(n); sto.set("aura_name", n); };
+  const handleName   = n => { setAuraName(n); sto.set("aura_name", n); };
+  const handleLogin  = s  => { setSession(s); };
+  const handleLogout = () => { auth.logout(); setSession(null); setTab("chat"); };
+
+  if (!session) return (
+    <>
+      <style>{CSS}</style>
+      <AuthScreen onLogin={handleLogin} />
+    </>
+  );
 
   if (showAdmin) return (
     <div style={{ height: "100vh", background: C.bg, fontFamily: "'DM Mono',monospace", color: "#fff", display: "flex", flexDirection: "column" }}>
@@ -61,6 +73,11 @@ export default function AuraOS() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          {session.name && session.role !== "guest" && (
+            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {session.name.split(" ")[0]}
+            </div>
+          )}
           <button onClick={() => setShowAdmin(true)} style={{ background: `${C.red}15`, border: `1px solid ${C.red}33`, borderRadius: 9, padding: "5px 11px", cursor: "pointer", fontSize: 10, color: C.red, fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>🔐 Admin</button>
           <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
             {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -70,11 +87,11 @@ export default function AuraOS() {
 
       {/* Active screen */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }} key={tab}>
-        {tab === "chat"      && <ChatScreen      auraName={auraName} />}
+        {tab === "chat"      && <ChatScreen      auraName={auraName} session={session} />}
+        {tab === "automate"  && <AutomateScreen  auraName={auraName} />}
         {tab === "design"    && <DesignScreen    auraName={auraName} />}
         {tab === "translate" && <TranslateScreen />}
-        {tab === "nav"       && <NavigateScreen  auraName={auraName} />}
-        {tab === "settings"  && <SettingsScreen  auraName={auraName} onNameChange={handleName} />}
+        {tab === "settings"  && <SettingsScreen  auraName={auraName} onNameChange={handleName} session={session} onLogout={handleLogout} />}
       </div>
 
       {/* Floating AURA bubble */}
