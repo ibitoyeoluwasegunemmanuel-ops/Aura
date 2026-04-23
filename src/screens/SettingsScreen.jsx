@@ -6,7 +6,7 @@ import { sto } from "../utils/storage";
 
 const NAMES = ["AURA","JARVIS","NOVA","ZARA","APEX","IRIS","NEXUS","ARIA","ZEUS","LUNA"];
 
-export default function SettingsScreen({ auraName, onNameChange }) {
+export default function SettingsScreen({ auraName, onNameChange, session, onLogout }) {
   const [name, setName]   = useState(auraName);
   const [saved, setSaved] = useState(false);
   const [profile, setProfile] = useState(() => sto.get("user_profile", { name: "", role: "", preferences: "", projects: "" }));
@@ -93,6 +93,34 @@ export default function SettingsScreen({ auraName, onNameChange }) {
         )}
       </Card>
 
+      {/* Account card */}
+      {session && (
+        <Card color={C.cyan}>
+          <Lbl color={C.cyan}>👤 Your Account</Lbl>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>Name</span>
+              <span style={{ fontSize: 11, color: "#fff" }}>{session.name}</span>
+            </div>
+            {session.email && (
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>Email</span>
+                <span style={{ fontSize: 11, color: "#fff" }}>{session.email}</span>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>Role</span>
+              <span style={{ fontSize: 11, color: session.role === "guest" ? C.gold : C.green, textTransform: "capitalize" }}>{session.role}</span>
+            </div>
+          </div>
+          {onLogout && (
+            <Btn color={C.red} outline small onClick={onLogout} style={{ width: "100%" }}>
+              🚪 Sign Out
+            </Btn>
+          )}
+        </Card>
+      )}
+
       {/* Deploy card */}
       <Card color={C.purple}>
         <Lbl color={C.purple}>Deploy & Host AURA OS</Lbl>
@@ -115,11 +143,16 @@ export default function SettingsScreen({ auraName, onNameChange }) {
       <Card>
         <Lbl>Active Features</Lbl>
         {[
-          { l: "AURA Chat (Claude AI)",          c: C.green  },
+          { l: "AURA Chat (Claude AI)",            c: C.green  },
+          { l: "Auth System (Login / Register)",  c: C.green  },
           { l: "Founder Identity Lock (CEO Global)", c: C.green },
-          { l: "Memory System (persistent)",     c: C.green  },
+          { l: "Memory System (persistent)",      c: C.green  },
+          { l: "Streaming Responses",             c: C.green  },
           { l: "Voice AI — speakFull (no cutoff)", c: C.green },
           { l: "Wake Word (auto-restart)",        c: C.green  },
+          { l: "Automation Engine (6 workflows)", c: C.green  },
+          { l: "WhatsApp Quick Send",             c: C.green  },
+          { l: "Tasks & Reminders",               c: C.green  },
           { l: "Claude Code Brain",               c: C.green  },
           { l: "Claude Design Brain",             c: C.green  },
           { l: "Image Generator",                 c: C.green  },
@@ -127,7 +160,11 @@ export default function SettingsScreen({ auraName, onNameChange }) {
           { l: "GPS Navigation",                  c: C.green  },
           { l: "Admin Dashboard",                 c: C.green  },
           { l: "Voice Clone (ElevenLabs)",        c: C.gold   },
-          { l: "WhatsApp Integration",            c: C.gold   },
+          { l: "WhatsApp Business API",           c: C.gold   },
+          { l: "Payment System (Flutterwave)",    c: C.gold   },
+          { l: "Firebase Real Database",          c: C.gold   },
+          { l: "Email Automation",                c: C.orange },
+          { l: "Social Media API",                c: C.orange },
           { l: "Video Generation",                c: C.orange },
           { l: "AR Glasses",                      c: C.purple },
         ].map((s, i, arr) => (
