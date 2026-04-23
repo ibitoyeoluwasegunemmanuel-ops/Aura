@@ -1,31 +1,50 @@
-// Vercel serverless function — proxies Claude API calls so the key stays server-side.
-export default async function handler(req, res) {
+// Edge runtime — supports both streaming and buffered Claude API calls.
+export const config = { runtime: "edge" };
+
+export default async function handler(req) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not configured on the server." });
+    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY is not configured on the server." }), { status: 500 });
   }
 
+  let body;
   try {
-    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(req.body),
-    });
-
-    const data = await upstream.json();
-    if (!upstream.ok) {
-      return res.status(upstream.status).json({ error: data?.error?.message || "Upstream error" });
-    }
-    return res.status(200).json(data);
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400 });
   }
+
+  const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!upstream.ok) {
+    const data = await upstream.json().catch(() => ({}));
+    return new Response(JSON.stringify({ error: data?.error?.message || "Upstream error" }), { status: upstream.status });
+  }
+
+  if (body.stream) {
+    return new Response(upstream.body, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
+  const data = await upstream.json();
+  return new Response(JSON.stringify(data), {
+    headers: { "Content-Type": "application/json" },
+  });
 }
