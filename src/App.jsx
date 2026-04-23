@@ -9,6 +9,7 @@ import ChatScreen      from "./screens/ChatScreen";
 import DesignScreen    from "./screens/DesignScreen";
 import AutomateScreen  from "./screens/AutomateScreen";
 import TranslateScreen from "./screens/TranslateScreen";
+import NavigateScreen  from "./screens/NavigateScreen";
 import SettingsScreen  from "./screens/SettingsScreen";
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
   { id: "automate",  icon: "⚡",  label: "Automate" },
   { id: "design",    icon: "✦",  label: "Design"   },
   { id: "translate", icon: "🌍", label: "Translate" },
+  { id: "navigate",  icon: "🗺️", label: "Navigate"  },
   { id: "settings",  icon: "⚙",  label: "Settings" },
 ];
 
@@ -91,6 +93,7 @@ export default function AuraOS() {
         {tab === "automate"  && <AutomateScreen  auraName={auraName} />}
         {tab === "design"    && <DesignScreen    auraName={auraName} />}
         {tab === "translate" && <TranslateScreen />}
+        {tab === "navigate"  && <NavigateScreen  auraName={auraName} />}
         {tab === "settings"  && <SettingsScreen  auraName={auraName} onNameChange={handleName} session={session} onLogout={handleLogout} />}
       </div>
 
