@@ -9,7 +9,6 @@ import ChatScreen      from "./screens/ChatScreen";
 import DesignScreen    from "./screens/DesignScreen";
 import AutomateScreen  from "./screens/AutomateScreen";
 import TranslateScreen from "./screens/TranslateScreen";
-import NavigateScreen  from "./screens/NavigateScreen";
 import SettingsScreen  from "./screens/SettingsScreen";
 
 const NAV = [
