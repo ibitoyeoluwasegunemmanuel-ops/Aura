@@ -26,6 +26,7 @@ export default function AuraOS() {
   const [tab, setTab]             = useState("chat");
   const [auraName, setAuraName]   = useState(() => sto.get("aura_name", "AURA"));
   const [showAdmin, setShowAdmin] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [time, setTime]           = useState(new Date());
 
   useEffect(() => {
@@ -41,6 +42,16 @@ export default function AuraOS() {
     <>
       <style>{CSS}</style>
       <AuthScreen onLogin={handleLogin} />
+    </>
+  );
+
+  if (minimized) return (
+    <>
+      <style>{CSS}</style>
+      <div onClick={() => setMinimized(false)}
+        style={{ position: "fixed", bottom: 28, right: 20, width: 60, height: 60, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 9999, fontSize: 26, boxShadow: `0 6px 28px ${C.cyan}66`, animation: "pulse 3s ease-in-out infinite" }}>
+        ◈
+      </div>
     </>
   );
 
@@ -84,6 +95,7 @@ export default function AuraOS() {
           <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
             {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </div>
+          <button onClick={() => setMinimized(true)} title="Minimize to bubble" style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border}`, borderRadius: 9, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "rgba(255,255,255,0.3)", lineHeight: 1 }}>—</button>
         </div>
       </div>
 
@@ -96,9 +108,6 @@ export default function AuraOS() {
         {tab === "navigate"  && <NavigateScreen  auraName={auraName} />}
         {tab === "settings"  && <SettingsScreen  auraName={auraName} onNameChange={handleName} session={session} onLogout={handleLogout} />}
       </div>
-
-      {/* Floating AURA bubble */}
-      <div onClick={() => setTab("chat")} style={{ position: "fixed", right: 0, top: "48%", width: 46, height: 46, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, borderRadius: "50% 0 0 50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 100, fontSize: 18, boxShadow: `0 0 18px ${C.cyan}55`, animation: "pulse 3s ease-in-out infinite" }}>◈</div>
 
       {/* Bottom nav */}
       <div style={{ position: "relative", zIndex: 20, background: `${C.bg}f2`, backdropFilter: "blur(20px)", borderTop: `1px solid ${C.border}`, display: "flex", padding: "7px 2px 16px", flexShrink: 0 }}>

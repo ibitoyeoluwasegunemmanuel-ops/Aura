@@ -4,136 +4,124 @@ import { Card, Btn, Lbl } from "../components/ui";
 import { callClaude, genImg } from "../utils/api";
 import { speakFull } from "../utils/voice";
 
-const STYLES = ["modern minimalist","futuristic dark","glassmorphism","neumorphism","brutalist","luxury gold","neon cyberpunk","clean corporate","playful colorful","African inspired"];
-const TYPES  = ["UI Design","Logo","Landing Page","Dashboard","Mobile App","Poster","Social Media","Brand Identity","Infographic","Illustration"];
 const EXAMPLES = [
-  "AURA OS landing page with dark futuristic theme",
-  "Logo for a Nigerian fintech startup called PayFlow",
-  "Dashboard for a crypto trading app",
+  "Fintech app dashboard for Nigeria",
+  "Logo for an AI startup called AURA",
+  "Landing page for a productivity tool",
   "Instagram post for a luxury fashion brand",
-  "Mobile app UI for a food delivery service in Lagos",
-  "Brand identity for an AI company",
+  "Mobile food delivery app UI",
+  "Crypto trading dashboard, dark theme",
 ];
 
 export default function DesignScreen({ auraName }) {
   const [prompt, setPrompt] = useState("");
-  const [style, setStyle]   = useState("modern minimalist");
-  const [type, setType]     = useState("UI Design");
-  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [aiDesc, setAiDesc]   = useState("");
-  const [count, setCount]     = useState(2);
+  const [result, setResult] = useState(null);
 
   const generate = async () => {
-    if (!prompt.trim()) return;
-    setLoading(true); setAiDesc(""); setResults([]);
-    const enhanced = await callClaude(
-      [{ role: "user", content: `I need a ${type} design: "${prompt}". Style: ${style}. Write a detailed visual description (colors, layout, typography, mood) in 2-3 sentences. Be specific and professional.` }],
-      "You are a world-class UI/UX designer and art director. Describe designs with precision."
+    if (!prompt.trim() || loading) return;
+    setLoading(true);
+    setResult(null);
+
+    const brief = await callClaude(
+      [{ role: "user", content: `Design request: "${prompt}". Write a 2-sentence visual description covering colors, layout, typography, and mood. Be specific and professional.` }],
+      `You are a world-class UI/UX designer and art director. Respond with only the design description — no preamble.`
     );
-    setAiDesc(enhanced);
-    const imgs = Array.from({ length: count }, (_, i) => ({
-      url: genImg(`${type}: ${enhanced}, ${style}, professional design, high quality`, Date.now() + i * 1000),
-    }));
-    setResults(imgs);
+
+    const imageUrl = genImg(`${prompt}, ${brief}, professional design, ultra high quality`, Date.now());
+    setResult({ brief, imageUrl });
     setLoading(false);
-    speakFull(`Generated ${count} ${type} design${count > 1 ? "s" : ""} for you!`);
+    speakFull(`Design ready. ${brief.split(".")[0]}.`);
   };
 
+  const reset = () => { setResult(null); setPrompt(""); };
+
   return (
-    <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12, height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14, height: "100%", overflowY: "auto" }}>
+
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ fontSize: 24 }}>✦</div>
+        <div style={{ fontSize: 22, color: C.purple }}>✦</div>
         <div>
-          <Lbl color={C.purple}>Claude Design Brain</Lbl>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: -8 }}>AI-powered design studio</div>
+          <Lbl color={C.purple}>Design Brain</Lbl>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: -6 }}>
+            Describe what you want — {auraName} does the rest
+          </div>
         </div>
-        <button onClick={() => window.open("https://claude.ai", "_blank")}
-          style={{ marginLeft: "auto", background: `${C.purple}15`, border: `1px solid ${C.purple}44`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 10, color: C.purple, fontFamily: "'DM Mono',monospace" }}>
-          Open Claude.ai ↗
-        </button>
       </div>
 
+      {/* Example chips */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
         {EXAMPLES.map((e, i) => (
-          <div key={i} onClick={() => setPrompt(e)} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 20, padding: "4px 10px", fontSize: 10, color: "rgba(255,255,255,0.45)", cursor: "pointer" }}>{e}</div>
+          <div key={i} onClick={() => setPrompt(e)}
+            style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 20, padding: "4px 12px", fontSize: 10, color: "rgba(255,255,255,0.4)", cursor: "pointer", transition: "all 0.15s" }}
+            onMouseEnter={el => { el.currentTarget.style.color = "rgba(255,255,255,0.75)"; el.currentTarget.style.borderColor = C.purple + "55"; }}
+            onMouseLeave={el => { el.currentTarget.style.color = "rgba(255,255,255,0.4)"; el.currentTarget.style.borderColor = C.border; }}>
+            {e}
+          </div>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
-        <div>
-          <Lbl>Design Type</Lbl>
-          <select value={type} onChange={e => setType(e.target.value)} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 11px", color: "#fff", fontSize: 11, fontFamily: "'DM Mono',monospace", outline: "none", width: "100%" }}>
-            {TYPES.map(t => <option key={t} style={{ background: "#111" }}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <Lbl>Style</Lbl>
-          <select value={style} onChange={e => setStyle(e.target.value)} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 11px", color: "#fff", fontSize: 11, fontFamily: "'DM Mono',monospace", outline: "none", width: "100%" }}>
-            {STYLES.map(s => <option key={s} style={{ background: "#111" }}>{s}</option>)}
-          </select>
-        </div>
+      {/* Input */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <textarea
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); generate(); } }}
+          placeholder={`What do you want to design? (e.g. "fintech mobile app for Nigeria")`}
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: `1.5px solid ${prompt.trim() ? C.purple + "66" : C.purple + "20"}`,
+            borderRadius: 14, padding: "14px 16px",
+            color: "#fff", fontSize: 13, fontFamily: "'DM Mono',monospace",
+            resize: "none", outline: "none", lineHeight: 1.6, height: 90,
+            transition: "border-color 0.2s",
+          }}
+        />
+        <Btn color={C.purple} onClick={generate} disabled={loading || !prompt.trim()} style={{ width: "100%" }}>
+          {loading ? "✦ Designing…" : "✦ Generate Design"}
+        </Btn>
       </div>
 
-      <textarea value={prompt} onChange={e => setPrompt(e.target.value)}
-        placeholder="Describe what you want to design..."
-        style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.purple}33`, borderRadius: 11, padding: "11px 13px", color: "#fff", fontSize: 13, fontFamily: "'DM Mono',monospace", resize: "none", outline: "none", lineHeight: 1.6, height: 75 }} />
-
-      <div style={{ display: "flex", gap: 9 }}>
-        <div style={{ flex: 1 }}>
-          <Lbl>Variations</Lbl>
-          <select value={count} onChange={e => setCount(Number(e.target.value))} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 11px", color: "#fff", fontSize: 11, fontFamily: "'DM Mono',monospace", outline: "none", width: "100%" }}>
-            {[1, 2, 4].map(n => <option key={n} style={{ background: "#111" }}>{n} design{n > 1 ? "s" : ""}</option>)}
-          </select>
-        </div>
-        <div style={{ flex: 2, display: "flex", alignItems: "flex-end" }}>
-          <Btn color={C.purple} onClick={generate} style={{ width: "100%" }} disabled={loading}>
-            {loading ? "✦ Designing..." : `✦ Generate ${count} Design${count > 1 ? "s" : ""}`}
-          </Btn>
-        </div>
-      </div>
-
-      {aiDesc && (
-        <Card color={C.purple}>
-          <Lbl color={C.purple}>Claude's Design Brief</Lbl>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", lineHeight: 1.7 }}>{aiDesc}</div>
-        </Card>
-      )}
-
+      {/* Loading */}
       {loading && (
-        <Card color={C.purple} style={{ textAlign: "center", padding: "24px" }}>
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 10 }}>
-            {[0, 1, 2].map(i => <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: C.purple, animation: `pulse ${0.7 + i * 0.15}s infinite` }} />)}
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: 9, height: 9, borderRadius: "50%", background: C.purple, animation: `pulse ${0.65 + i * 0.15}s ease-in-out infinite` }} />
+            ))}
           </div>
-          <div style={{ fontSize: 12, color: C.purple }}>Claude is designing your {type}...</div>
-        </Card>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>{auraName} IS DESIGNING…</div>
+        </div>
       )}
 
-      {results.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: count === 1 ? "1fr" : "1fr 1fr", gap: 10 }}>
-          {results.map((r, i) => (
-            <div key={i} style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${C.purple}33` }}>
-              <div style={{ padding: "5px 9px", background: `${C.purple}15`, fontSize: 9, color: C.purple, display: "flex", justifyContent: "space-between" }}>
-                <span>✦ Design {i + 1}</span>
-                <a href={r.url} target="_blank" rel="noreferrer" style={{ color: C.cyan, textDecoration: "none" }}>⬇ Save</a>
-              </div>
-              <img src={r.url} alt={`Design ${i + 1}`} style={{ width: "100%", display: "block", minHeight: 120, background: "rgba(123,47,247,0.05)" }}
-                onError={e => { e.target.style.opacity = "0.2"; }} />
+      {/* Result */}
+      {result && (
+        <>
+          <Card color={C.purple}>
+            <div style={{ fontSize: 9, color: C.purple, letterSpacing: 2, marginBottom: 8 }}>DESIGN BRIEF</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", lineHeight: 1.75 }}>{result.brief}</div>
+          </Card>
+
+          <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${C.purple}44` }}>
+            <div style={{ padding: "7px 12px", background: `${C.purple}15`, fontSize: 10, color: C.purple, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>✦ {prompt.length > 44 ? prompt.slice(0, 44) + "…" : prompt}</span>
+              <a href={result.imageUrl} target="_blank" rel="noreferrer" style={{ color: C.cyan, textDecoration: "none" }}>⬇ Save</a>
             </div>
-          ))}
-        </div>
-      )}
+            <img
+              src={result.imageUrl}
+              alt={prompt}
+              style={{ width: "100%", display: "block", minHeight: 160, background: "rgba(123,47,247,0.06)" }}
+              onError={e => { e.target.style.opacity = "0.25"; }}
+            />
+          </div>
 
-      <Card color={C.cyan}>
-        <Lbl color={C.cyan}>Claude Code — Build It From This Design</Lbl>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.7, marginBottom: 10 }}>
-          Once you have your design, use Claude Code to turn it into real working code — React, HTML, or any framework.
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Btn color={C.cyan} small outline onClick={() => window.open("https://claude.ai", "_blank")}>Open Claude.ai ↗</Btn>
-          <Btn color={C.purple} small outline onClick={() => window.open("https://github.com/ibitoyeoluwasegunemmanuel-ops/Aura", "_blank")}>GitHub Repo ↗</Btn>
-        </div>
-      </Card>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn color={C.purple} small onClick={generate} style={{ flex: 1 }}>↻ Regenerate</Btn>
+            <Btn color={C.cyan} small outline onClick={reset}>✕ New design</Btn>
+          </div>
+        </>
+      )}
     </div>
   );
 }

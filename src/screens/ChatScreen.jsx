@@ -74,12 +74,13 @@ function renderInline(text) {
 }
 
 export default function ChatScreen({ auraName }) {
-  const [msgs, setMsgs]         = useState([]);
-  const [input, setInput]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [msgs, setMsgs]           = useState([]);
+  const [input, setInput]         = useState("");
+  const [loading, setLoading]     = useState(false);
   const [listening, setListening] = useState(false);
-  const [wakeOn, setWakeOn]     = useState(false);
-  const [copied, setCopied]     = useState(null);
+  const [interimText, setInterimText] = useState("");
+  const [wakeOn, setWakeOn]       = useState(false);
+  const [copied, setCopied]       = useState(null);
   const endRef       = useRef();
   const wakeRef      = useRef();
   const textareaRef  = useRef();
@@ -135,16 +136,39 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
 
   useEffect(() => { startWake(); return () => wakeRef.current?.stop(); }, [startWake]);
 
-  const startVoice = () => {
+  const startVoice = async () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert("Voice requires Chrome browser"); return; }
+    if (!SR) {
+      setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Voice requires Chrome or Edge browser.", id: Date.now(), streaming: false }]);
+      return;
+    }
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Microphone access denied. Tap the lock icon in your address bar and allow microphone.", id: Date.now(), streaming: false }]);
+      return;
+    }
     wakeRef.current?.stop();
     listeningRef.current = true;
-    const r = new SR(); r.lang = "en-US"; r.interimResults = false;
-    r.onstart  = () => setListening(true);
-    r.onend    = () => { setListening(false); listeningRef.current = false; setTimeout(startWake, 600); };
-    r.onresult = (e) => send(e.results[0][0].transcript);
-    r.onerror  = () => { setListening(false); listeningRef.current = false; };
+    const r = new SR(); r.lang = "en-US"; r.interimResults = true;
+    r.onstart  = () => { setListening(true); setInterimText(""); };
+    r.onend    = () => { setListening(false); setInterimText(""); listeningRef.current = false; setTimeout(startWake, 600); };
+    r.onresult = (e) => {
+      const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join("");
+      const final   = Array.from(e.results).filter(x =>  x.isFinal).map(x => x[0].transcript).join("");
+      setInterimText(interim);
+      if (final) { setInterimText(""); r.stop(); send(final); }
+    };
+    r.onerror = (e) => {
+      setListening(false); setInterimText(""); listeningRef.current = false;
+      if (e.error === "not-allowed") {
+        setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Microphone blocked. Allow it in your browser settings then try again.", id: Date.now(), streaming: false }]);
+      } else if (e.error === "no-speech") {
+        setTimeout(startVoice, 400);
+        return;
+      }
+      setTimeout(startWake, 600);
+    };
     try { r.start(); } catch {}
   };
 
@@ -371,9 +395,9 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
             transition: "border-color 0.2s",
             boxShadow: input.trim() ? `0 0 20px ${C.cyan}10` : "none",
           }}>
-            <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={`Message ${auraName}...`}
+            <textarea ref={textareaRef} value={listening ? interimText : input} onChange={e => !listening && setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !listening) { e.preventDefault(); send(); } }}
+              placeholder={listening ? "Listening… speak now" : `Message ${auraName}…`}
               rows={1}
               style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
             <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "flex-end", paddingBottom: 1 }}>
