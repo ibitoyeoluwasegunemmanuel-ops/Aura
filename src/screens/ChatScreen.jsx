@@ -21,6 +21,58 @@ const QUICK = [
 
 const CMD_RE = /\[(IMAGE|PREVIEW|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
 
+function Markdown({ text }) {
+  const lines = text.split("\n");
+  const els = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      const lang = line.slice(3).trim();
+      const code = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }
+      els.push(
+        <pre key={i} style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px", overflowX: "auto", margin: "6px 0" }}>
+          {lang && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginBottom: 6, letterSpacing: 2 }}>{lang.toUpperCase()}</div>}
+          <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#a8ff78", whiteSpace: "pre" }}>{code.join("\n")}</code>
+        </pre>
+      );
+    } else if (/^#{1,3} /.test(line)) {
+      const lvl = line.match(/^(#{1,3}) /)[1].length;
+      const txt = line.replace(/^#{1,3} /, "");
+      els.push(<div key={i} style={{ fontWeight: 700, fontSize: lvl === 1 ? 16 : lvl === 2 ? 14 : 13, color: "#fff", margin: "10px 0 4px" }}>{txt}</div>);
+    } else if (/^[-*•] /.test(line)) {
+      els.push(<div key={i} style={{ display: "flex", gap: 8, marginBottom: 3 }}><span style={{ color: C.cyan, flexShrink: 0, marginTop: 2 }}>▸</span><span>{renderInline(line.replace(/^[-*•] /, ""))}</span></div>);
+    } else if (/^\d+[.)]\s/.test(line)) {
+      const num = line.match(/^(\d+)[.)]/)[1];
+      const txt = line.replace(/^\d+[.)]\s*/, "");
+      els.push(<div key={i} style={{ display: "flex", gap: 8, marginBottom: 3 }}><span style={{ color: C.cyan, flexShrink: 0, minWidth: 16, fontWeight: 700 }}>{num}.</span><span>{renderInline(txt)}</span></div>);
+    } else if (line.trim() === "") {
+      els.push(<div key={i} style={{ height: 6 }} />);
+    } else {
+      els.push(<div key={i} style={{ marginBottom: 2 }}>{renderInline(line)}</div>);
+    }
+    i++;
+  }
+  return <div style={{ lineHeight: 1.75 }}>{els}</div>;
+}
+
+function renderInline(text) {
+  const parts = [];
+  const re = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`([^`]+)`)/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    if (m[1]) parts.push(<strong key={m.index} style={{ color: "#fff", fontWeight: 700 }}>{m[2]}</strong>);
+    else if (m[3]) parts.push(<em key={m.index} style={{ color: "rgba(255,255,255,0.8)" }}>{m[4]}</em>);
+    else if (m[5]) parts.push(<code key={m.index} style={{ background: "rgba(0,255,229,0.08)", border: "1px solid rgba(0,255,229,0.15)", borderRadius: 4, padding: "1px 5px", fontFamily: "'DM Mono',monospace", fontSize: 12, color: C.cyan }}>{m[6]}</code>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length ? parts : text;
+}
+
 export default function ChatScreen({ auraName }) {
   const [msgs, setMsgs]         = useState([]);
   const [input, setInput]       = useState("");
@@ -167,12 +219,15 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
 
       {/* Wake word bar */}
-      <div style={{ padding: "4px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+      <div style={{ padding: "4px 16px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: wakeOn ? C.green : "rgba(255,255,255,0.1)", boxShadow: wakeOn ? `0 0 8px ${C.green}` : "none", transition: "all 0.3s" }} />
         <span style={{ fontSize: 9, color: wakeOn ? C.green : "rgba(255,255,255,0.18)", letterSpacing: 2, flex: 1 }}>
           {wakeOn ? `WAKE WORD ACTIVE — SAY "HEY ${auraName.toUpperCase()}"` : "WAKE WORD STANDBY"}
         </span>
-        <button onClick={() => speakFull(`Hey! I'm ${auraName}. Ready.`)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 11, padding: 0 }}>🔊</button>
+        <button onClick={() => speakFull(`Hey! I'm ${auraName}. Ready.`)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 11, padding: "2px 6px" }}>🔊</button>
+        {hasMessages && (
+          <button onClick={() => { setMsgs([]); sto.set("chat_history", []); }} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 7, padding: "2px 8px", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono',monospace" }}>✕ New chat</button>
+        )}
       </div>
 
       {/* Message area */}
@@ -247,13 +302,14 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
                         background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent",
                         border: m.role === "user" ? `1px solid ${C.purple}44` : "none",
                         fontSize: 13.5,
-                        lineHeight: 1.8,
                         color: "rgba(255,255,255,0.9)",
-                        whiteSpace: "pre-wrap",
                         fontFamily: "'Inter','DM Mono',sans-serif",
                         letterSpacing: 0.1,
                       }}>
-                        {m.content}
+                        {m.role === "user"
+                          ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span>
+                          : <Markdown text={m.content} />
+                        }
                         {m.streaming && (
                           <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />
                         )}
