@@ -5,21 +5,24 @@ import { speakFull } from "../utils/voice";
 import { sto } from "../utils/storage";
 import { FOUNDER_SYSTEM_BLOCK } from "../data/founder";
 
-const CAPABILITIES = [
-  { icon: "💻", title: "Build & Code", desc: "Websites, apps, scripts, APIs" },
-  { icon: "🎨", title: "Create Images", desc: "Generate any image from text" },
-  { icon: "🌍", title: "Translate", desc: "44 languages, instant" },
-  { icon: "🧠", title: "Analyze & Research", desc: "Deep insights on any topic" },
+const CMD_RE = /\[(IMAGE|PREVIEW|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
+
+const PLUS_OPTIONS = [
+  { id: "camera",   icon: "📷", label: "Camera"       },
+  { id: "photos",   icon: "🖼️", label: "Photos"       },
+  { id: "files",    icon: "📁", label: "Files"        },
+  { id: "image",    icon: "🎨", label: "Create Image" },
+  { id: "search",   icon: "🌐", label: "Web Search"   },
+  { id: "think",    icon: "🧠", label: "Think Deeper" },
+  { id: "research", icon: "🔍", label: "Deep Research"},
 ];
 
 const QUICK = [
-  "Build a landing page for AURA OS",
+  "What can you do?",
   "Generate an image of a futuristic African city",
-  "Write Python code to scrape prices",
-  "Translate 'hello' to Yoruba, Pidgin and French",
+  "Write a business plan for a Nigerian startup",
+  "Translate 'good morning' to Yoruba",
 ];
-
-const CMD_RE = /\[(IMAGE|PREVIEW|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
 
 function Markdown({ text }) {
   const lines = text.split("\n");
@@ -33,21 +36,19 @@ function Markdown({ text }) {
       i++;
       while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }
       els.push(
-        <pre key={i} style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px", overflowX: "auto", margin: "6px 0" }}>
+        <pre key={i} style={{ background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px", overflowX: "auto", margin: "6px 0" }}>
           {lang && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginBottom: 6, letterSpacing: 2 }}>{lang.toUpperCase()}</div>}
           <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#a8ff78", whiteSpace: "pre" }}>{code.join("\n")}</code>
         </pre>
       );
     } else if (/^#{1,3} /.test(line)) {
       const lvl = line.match(/^(#{1,3}) /)[1].length;
-      const txt = line.replace(/^#{1,3} /, "");
-      els.push(<div key={i} style={{ fontWeight: 700, fontSize: lvl === 1 ? 16 : lvl === 2 ? 14 : 13, color: "#fff", margin: "10px 0 4px" }}>{txt}</div>);
+      els.push(<div key={i} style={{ fontWeight: 700, fontSize: lvl === 1 ? 16 : lvl === 2 ? 14 : 13, color: "#fff", margin: "10px 0 4px" }}>{line.replace(/^#{1,3} /, "")}</div>);
     } else if (/^[-*•] /.test(line)) {
-      els.push(<div key={i} style={{ display: "flex", gap: 8, marginBottom: 3 }}><span style={{ color: C.cyan, flexShrink: 0, marginTop: 2 }}>▸</span><span>{renderInline(line.replace(/^[-*•] /, ""))}</span></div>);
+      els.push(<div key={i} style={{ display: "flex", gap: 8, marginBottom: 3 }}><span style={{ color: C.cyan, flexShrink: 0 }}>▸</span><span>{renderInline(line.replace(/^[-*•] /, ""))}</span></div>);
     } else if (/^\d+[.)]\s/.test(line)) {
       const num = line.match(/^(\d+)[.)]/)[1];
-      const txt = line.replace(/^\d+[.)]\s*/, "");
-      els.push(<div key={i} style={{ display: "flex", gap: 8, marginBottom: 3 }}><span style={{ color: C.cyan, flexShrink: 0, minWidth: 16, fontWeight: 700 }}>{num}.</span><span>{renderInline(txt)}</span></div>);
+      els.push(<div key={i} style={{ display: "flex", gap: 8, marginBottom: 3 }}><span style={{ color: C.cyan, flexShrink: 0, minWidth: 16, fontWeight: 700 }}>{num}.</span><span>{renderInline(line.replace(/^\d+[.)]\s*/, ""))}</span></div>);
     } else if (line.trim() === "") {
       els.push(<div key={i} style={{ height: 6 }} />);
     } else {
@@ -73,40 +74,45 @@ function renderInline(text) {
   return parts.length ? parts : text;
 }
 
-export default function ChatScreen({ auraName }) {
-  const [msgs, setMsgs]           = useState([]);
-  const [input, setInput]         = useState("");
-  const [loading, setLoading]     = useState(false);
-  const [listening, setListening] = useState(false);
+export default function ChatScreen({ auraName, session }) {
+  const [msgs, setMsgs]               = useState([]);
+  const [input, setInput]             = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [voiceMode, setVoiceMode]     = useState(false);
+  const [voiceState, setVoiceState]   = useState("idle");
   const [interimText, setInterimText] = useState("");
-  const [wakeOn, setWakeOn]       = useState(false);
-  const [copied, setCopied]       = useState(null);
+  const [wakeOn, setWakeOn]           = useState(false);
+  const [copied, setCopied]           = useState(null);
+  const [showPlus, setShowPlus]       = useState(false);
+  const [attachment, setAttachment]   = useState(null);
+  const [thinkMode, setThinkMode]     = useState(false);
+
   const endRef       = useRef();
   const wakeRef      = useRef();
   const textareaRef  = useRef();
+  const fileInputRef = useRef();
+  const camInputRef  = useRef();
   const listeningRef = useRef(false);
+  const voiceModeRef = useRef(false);
+  const voiceRecRef  = useRef(null);
+  const msgsRef      = useRef([]);
+
+  useEffect(() => { msgsRef.current = msgs; }, [msgs]);
 
   const userProfile = sto.get("user_profile", null);
-  const userName    = userProfile?.name || null;
+  const userName    = userProfile?.name || session?.name || null;
 
-  const SYSTEM = `You are ${auraName}, a genius personal AI OS — warm, sharp, like a brilliant best friend.
+  const SYSTEM = `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
-${userProfile?.name || userProfile?.role ? `
-USER PROFILE — remember this always:
-  Name: ${userProfile.name || "not set"}
-  Role: ${userProfile.role || "not set"}
-  Preferences: ${userProfile.preferences || "none"}
-  Active Projects: ${userProfile.projects || "none"}
-Address the user by name when you know it. Personalize every response.` : ""}
+${userProfile?.name ? `\nUser's name: ${userProfile.name}. Role: ${userProfile.role || ""}. Preferences: ${userProfile.preferences || ""}. Projects: ${userProfile.projects || ""}.` : ""}
 
-Special commands — emit on their own line when relevant:
-[IMAGE: detailed description] — when asked to generate/create/show an image
-[PREVIEW: visual description] — when building a website/app/landing page (also write full HTML)
-[LOCATION] — when asked for location/GPS
-[OPEN: url] — when asked to open a website
+Response style: Be direct. Say "Here's what you need:" not "Here is the answer...". Sound natural and confident. Use emojis naturally.
 
-You have: Claude AI Brain, Claude Code Brain, Claude Design Brain, Image Generator.
-Be helpful, use emojis naturally, keep responses clear and focused.`;
+Special commands (emit on own line when relevant):
+[IMAGE: description] — generate image
+[PREVIEW: description] — build UI/website
+[LOCATION] — get GPS
+[OPEN: url] — open website`;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -125,8 +131,9 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
     r.onend    = () => { setWakeOn(false); if (!listeningRef.current) setTimeout(startWake, 600); };
     r.onresult = (e) => {
       const t = Array.from(e.results).map(x => x[0].transcript).join("").toLowerCase();
-      const n = auraName.toLowerCase();
-      if (t.includes(`hey ${n}`) || t.includes(n)) { r.stop(); setTimeout(startVoice, 400); }
+      if (t.includes(`hey ${auraName.toLowerCase()}`) || t.includes(auraName.toLowerCase())) {
+        r.stop(); setTimeout(activateVoiceMode, 400);
+      }
     };
     r.onerror = (e) => { setWakeOn(false); if (e.error !== "aborted" && !listeningRef.current) setTimeout(startWake, 800); };
     wakeRef.current = r;
@@ -136,40 +143,135 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
 
   useEffect(() => { startWake(); return () => wakeRef.current?.stop(); }, [startWake]);
 
-  const startVoice = async () => {
+  const startVoiceLoop = useCallback(() => {
+    if (!voiceModeRef.current) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Voice requires Chrome or Edge browser.", id: Date.now(), streaming: false }]);
-      return;
-    }
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Microphone access denied. Tap the lock icon in your address bar and allow microphone.", id: Date.now(), streaming: false }]);
-      return;
-    }
-    wakeRef.current?.stop();
+    if (!SR) return;
     listeningRef.current = true;
+    setVoiceState("listening");
+    setInterimText("");
     const r = new SR(); r.lang = "en-US"; r.interimResults = true;
-    r.onstart  = () => { setListening(true); setInterimText(""); };
-    r.onend    = () => { setListening(false); setInterimText(""); listeningRef.current = false; setTimeout(startWake, 600); };
+    voiceRecRef.current = r;
+    let captured = "";
     r.onresult = (e) => {
       const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join("");
       const final   = Array.from(e.results).filter(x =>  x.isFinal).map(x => x[0].transcript).join("");
-      setInterimText(interim);
-      if (final) { setInterimText(""); r.stop(); send(final); }
+      setInterimText(interim || final);
+      if (final) captured = final;
+    };
+    r.onend = () => {
+      listeningRef.current = false; setInterimText("");
+      if (captured.trim() && voiceModeRef.current) sendVoice(captured.trim());
+      else if (voiceModeRef.current) setTimeout(startVoiceLoop, 400);
     };
     r.onerror = (e) => {
-      setListening(false); setInterimText(""); listeningRef.current = false;
-      if (e.error === "not-allowed") {
-        setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Microphone blocked. Allow it in your browser settings then try again.", id: Date.now(), streaming: false }]);
-      } else if (e.error === "no-speech") {
-        setTimeout(startVoice, 400);
-        return;
-      }
-      setTimeout(startWake, 600);
+      listeningRef.current = false; setInterimText("");
+      if (e.error === "no-speech" && voiceModeRef.current) setTimeout(startVoiceLoop, 300);
+      else if (e.error === "not-allowed") { voiceModeRef.current = false; setVoiceMode(false); setVoiceState("idle"); }
+      else if (voiceModeRef.current && e.error !== "aborted") setTimeout(startVoiceLoop, 800);
     };
     try { r.start(); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sendVoice = async (text) => {
+    if (!voiceModeRef.current) return;
+    setVoiceState("thinking");
+    window.speechSynthesis.cancel();
+    const history = [...msgsRef.current, { role: "user", type: "text", content: text }];
+    setMsgs(history);
+    const pid = Date.now();
+    setMsgs(m => [...m, { role: "assistant", type: "text", content: "", id: pid, streaming: true }]);
+    let full = "";
+    try {
+      await callClaudeStream(
+        history.map(m => ({ role: m.role, content: m.content })),
+        SYSTEM + "\n\nVOICE MODE: Max 2-3 sentences. Direct and conversational. No markdown.",
+        (chunk) => { full += chunk; setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x)); }
+      );
+      const clean = full.replace(CMD_RE, "").trim();
+      setMsgs(m => {
+        const updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
+        sto.set("chat_history", updated.filter(x => x.type === "text").map(x => ({ role: x.role, content: x.content })).slice(-20));
+        return updated;
+      });
+      setVoiceState("speaking");
+      speakFull(clean, () => { if (voiceModeRef.current) { setVoiceState("listening"); setTimeout(startVoiceLoop, 500); } });
+    } catch (e) {
+      setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `⚠️ ${e.message}`, streaming: false } : x));
+      if (voiceModeRef.current) setTimeout(startVoiceLoop, 800);
+    }
+  };
+
+  const activateVoiceMode = async () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Voice needs Chrome or Edge.", id: Date.now(), streaming: false }]); return; }
+    try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch {
+      setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Mic blocked — allow it in browser settings.", id: Date.now(), streaming: false }]);
+      return;
+    }
+    wakeRef.current?.stop();
+    voiceModeRef.current = true;
+    setVoiceMode(true);
+    startVoiceLoop();
+  };
+
+  const deactivateVoiceMode = () => {
+    voiceModeRef.current = false;
+    setVoiceMode(false); setVoiceState("idle"); setInterimText("");
+    window.speechSynthesis.cancel();
+    voiceRecRef.current?.stop();
+    listeningRef.current = false;
+    setTimeout(startWake, 400);
+  };
+
+  const startDictation = async () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return; }
+    wakeRef.current?.stop();
+    listeningRef.current = true;
+    const r = new SR(); r.lang = "en-US"; r.interimResults = true;
+    r.onstart = () => setVoiceState("dictating");
+    r.onresult = (e) => {
+      const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join("");
+      const final   = Array.from(e.results).filter(x =>  x.isFinal).map(x => x[0].transcript).join("");
+      setInput(interim || final || input);
+      if (final) { setInput(final); r.stop(); }
+    };
+    r.onend = () => { listeningRef.current = false; setVoiceState("idle"); setTimeout(startWake, 600); };
+    r.onerror = (e) => {
+      listeningRef.current = false; setVoiceState("idle");
+      if (e.error === "no-speech") setTimeout(startDictation, 300);
+      else setTimeout(startWake, 600);
+    };
+    try { r.start(); } catch {}
+  };
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    setShowPlus(false);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = e.target.result;
+        setAttachment({ type: "image", file, preview: data, base64: data.split(",")[1], mediaType: file.type });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setAttachment({ type: "file", file, preview: null });
+    }
+  };
+
+  const handlePlusOption = (id) => {
+    setShowPlus(false);
+    if (id === "camera")   { camInputRef.current?.click(); return; }
+    if (id === "photos")   { fileInputRef.current?.click(); return; }
+    if (id === "files")    { fileInputRef.current?.click(); return; }
+    if (id === "image")    { setInput("Generate an image of "); textareaRef.current?.focus(); return; }
+    if (id === "search")   { setInput("Search and tell me about: "); textareaRef.current?.focus(); return; }
+    if (id === "think")    { setThinkMode(t => !t); return; }
+    if (id === "research") { setInput("Research in depth: "); textareaRef.current?.focus(); return; }
   };
 
   const copyMsg = (text, idx) => {
@@ -178,59 +280,63 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
 
   const send = async (text) => {
     const t = (text || input).trim();
-    if (!t || loading) return;
+    if ((!t && !attachment) || loading) return;
     setInput("");
-    const history  = [...msgs, { role: "user", type: "text", content: t }];
+    const userMsg = {
+      role: "user", type: "text",
+      content: t || (attachment?.type === "file" ? `[File: ${attachment.file.name}]` : "Describe this image."),
+    };
+    if (attachment?.preview) userMsg.imagePreview = attachment.preview;
+    const history = [...msgs, userMsg];
     setMsgs(history);
+    const att = attachment;
+    setAttachment(null);
     setLoading(true);
-
     const pid = Date.now();
     setMsgs(m => [...m, { role: "assistant", type: "text", content: "", id: pid, streaming: true }]);
 
+    const apiMsgs = history.map((msg, idx) => {
+      if (idx === history.length - 1 && att?.base64) {
+        return { role: msg.role, content: [
+          { type: "image", source: { type: "base64", media_type: att.mediaType, data: att.base64 } },
+          { type: "text", text: t || "What do you see?" },
+        ]};
+      }
+      return { role: msg.role, content: msg.content };
+    });
+
+    const sys = thinkMode ? SYSTEM + "\n\nTHINKING MODE: Reason step by step carefully before responding." : SYSTEM;
     let full = "";
     try {
-      await callClaudeStream(
-        history.map(m => ({ role: m.role, content: m.content })),
-        SYSTEM,
-        (chunk) => {
-          full += chunk;
-          setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x));
-        }
-      );
-
-      // Process special commands after full reply received
+      await callClaudeStream(apiMsgs, sys, (chunk) => {
+        full += chunk;
+        setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x));
+      });
       const extra = [];
       if (full.includes("[IMAGE:")) {
-        const match = full.match(/\[IMAGE:\s*(.+?)\]/);
-        const desc  = match?.[1] || t;
+        const desc = full.match(/\[IMAGE:\s*(.+?)\]/)?.[1] || t;
         extra.push({ role: "assistant", type: "image", imageUrl: genImg(desc), caption: desc });
       } else if (full.includes("[PREVIEW:")) {
-        const match = full.match(/\[PREVIEW:\s*(.+?)\]/);
-        const desc  = match?.[1] || t;
-        extra.push({ role: "assistant", type: "preview", imageUrl: genImg(`website UI screenshot ${desc}, dark professional modern`), caption: desc });
+        const desc = full.match(/\[PREVIEW:\s*(.+?)\]/)?.[1] || t;
+        extra.push({ role: "assistant", type: "preview", imageUrl: genImg(`website UI: ${desc}`), caption: desc });
       } else if (full.includes("[LOCATION]")) {
         navigator.geolocation?.getCurrentPosition(
-          p => setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full.replace("[LOCATION]", "").trim() || `📍 ${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`, streaming: false } : x)),
-          () => setMsgs(m => m.map(x => x.id === pid ? { ...x, content: "Please allow location access in browser settings.", streaming: false } : x))
+          p => setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `📍 ${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`, streaming: false } : x)),
+          () => setMsgs(m => m.map(x => x.id === pid ? { ...x, content: "Location access required.", streaming: false } : x))
         );
         setLoading(false); return;
       } else if (full.includes("[OPEN:")) {
-        const match = full.match(/\[OPEN:\s*(.+?)\]/);
-        const url   = match?.[1]?.trim();
+        const url = full.match(/\[OPEN:\s*(.+?)\]/)?.[1]?.trim();
         if (url) window.open(url.startsWith("http") ? url : `https://${url}`, "_blank");
       }
-
-      const cleanContent = full.replace(CMD_RE, "").trim();
-
+      const clean = full.replace(CMD_RE, "").trim();
       setMsgs(m => {
-        let updated = m.map(x => x.id === pid ? { ...x, content: cleanContent, streaming: false } : x);
+        let updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
         if (extra.length) updated = [...updated, ...extra];
-        const plain = updated.filter(x => x.type === "text").map(x => ({ role: x.role, content: x.content })).slice(-20);
-        sto.set("chat_history", plain);
+        sto.set("chat_history", updated.filter(x => x.type === "text").map(x => ({ role: x.role, content: x.content })).slice(-20));
         return updated;
       });
-
-      speakFull(cleanContent);
+      speakFull(clean);
     } catch (e) {
       setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `⚠️ ${e.message}`, streaming: false } : x));
     }
@@ -238,144 +344,110 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
   };
 
   const hasMessages = msgs.length > 0;
+  const stateColor  = voiceState === "listening" ? C.green : voiceState === "speaking" ? C.cyan : C.gold;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative" }}>
 
-      {/* Wake word bar */}
-      <div style={{ padding: "4px 16px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.txt,.doc,.docx" style={{ display: "none" }} onChange={e => handleFile(e.target.files?.[0])} />
+      <input ref={camInputRef}  type="file" accept="image/*" capture="environment"            style={{ display: "none" }} onChange={e => handleFile(e.target.files?.[0])} />
+
+      {/* ── VOICE CONVERSATION OVERLAY ── */}
+      {voiceMode && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 50, background: `${C.bg}f0`, backdropFilter: "blur(24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24 }}>
+          <div style={{ fontSize: 10, letterSpacing: 4, color: stateColor, textTransform: "uppercase", fontFamily: "'DM Mono',monospace" }}>
+            {voiceState === "listening" ? "Listening…" : voiceState === "thinking" ? "Thinking…" : "Speaking…"}
+          </div>
+          <div style={{ position: "relative", width: 140, height: 140, cursor: "pointer" }} onClick={deactivateVoiceMode}>
+            <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${stateColor}33`, animation: "rotate 5s linear infinite" }} />
+            <div style={{ position: "absolute", inset: 12, borderRadius: "50%", border: `1.5px solid ${stateColor}22`, animation: "rotate 9s linear infinite reverse" }} />
+            <div style={{ position: "absolute", inset: 22, borderRadius: "50%", background: `radial-gradient(circle,${stateColor}18,transparent)`, animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, color: stateColor, filter: `drop-shadow(0 0 18px ${stateColor}88)` }}>◈</div>
+          </div>
+          {interimText && (
+            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", maxWidth: 280, textAlign: "center", lineHeight: 1.6 }}>"{interimText}"</div>
+          )}
+          {voiceState === "speaking" && (() => {
+            const last = [...msgs].reverse().find(m => m.role === "assistant" && m.content);
+            return last ? <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", maxWidth: 280, textAlign: "center", lineHeight: 1.7 }}>{last.content.slice(0, 110)}{last.content.length > 110 ? "…" : ""}</div> : null;
+          })()}
+          <button onClick={deactivateVoiceMode} style={{ background: `${C.red}18`, border: `1.5px solid ${C.red}55`, borderRadius: "50%", width: 52, height: 52, cursor: "pointer", color: C.red, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", letterSpacing: 1 }}>TAP ✕ TO END</div>
+        </div>
+      )}
+
+      {/* ── TOP BAR ── */}
+      <div style={{ padding: "4px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: wakeOn ? C.green : "rgba(255,255,255,0.1)", boxShadow: wakeOn ? `0 0 8px ${C.green}` : "none", transition: "all 0.3s" }} />
         <span style={{ fontSize: 9, color: wakeOn ? C.green : "rgba(255,255,255,0.18)", letterSpacing: 2, flex: 1 }}>
-          {wakeOn ? `WAKE WORD ACTIVE — SAY "HEY ${auraName.toUpperCase()}"` : "WAKE WORD STANDBY"}
+          {wakeOn ? `SAY "HEY ${auraName.toUpperCase()}" TO TALK` : "WAKE WORD STANDBY"}
         </span>
-        <button onClick={() => speakFull(`Hey! I'm ${auraName}. Ready.`)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 11, padding: "2px 6px" }}>🔊</button>
-        {hasMessages && (
-          <button onClick={() => { setMsgs([]); sto.set("chat_history", []); }} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 7, padding: "2px 8px", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono',monospace" }}>✕ New chat</button>
-        )}
+        {thinkMode && <span style={{ fontSize: 9, color: C.gold, background: `${C.gold}15`, border: `1px solid ${C.gold}33`, borderRadius: 6, padding: "1px 7px" }}>🧠 THINK</span>}
+        {hasMessages && <button onClick={() => { setMsgs([]); sto.set("chat_history", []); }} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 7, padding: "2px 8px", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono',monospace" }}>✕ New chat</button>}
       </div>
 
-      {/* Message area */}
+      {/* ── MESSAGES ── */}
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
         {!hasMessages ? (
-
-          /* ── WELCOME SCREEN ── */
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 20px 12px", gap: 22, maxWidth: 680, margin: "0 auto", width: "100%" }}>
-
-            {/* Animated orb */}
-            <div style={{ position: "relative", width: 76, height: 76 }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 20px 12px", gap: 20, maxWidth: 680, margin: "0 auto", width: "100%" }}>
+            <div style={{ position: "relative", width: 80, height: 80, cursor: "pointer" }} onClick={activateVoiceMode}>
               <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1.5px solid ${C.cyan}44`, animation: "rotate 8s linear infinite" }} />
-              <div style={{ position: "absolute", inset: 4, borderRadius: "50%", border: `1px solid ${C.purple}33`, animation: "rotate 12s linear infinite reverse" }} />
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, color: C.cyan }}>◈</div>
+              <div style={{ position: "absolute", inset: 5, borderRadius: "50%", border: `1px solid ${C.purple}33`, animation: "rotate 12s linear infinite reverse" }} />
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: C.cyan }}>◈</div>
+              <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>TAP TO TALK</div>
             </div>
-
-            {/* Greeting */}
-            <div style={{ textAlign: "center", lineHeight: 1 }}>
-              <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 20, fontWeight: 900, color: "#fff", marginBottom: 8, letterSpacing: 1 }}>
-                {userName ? `Good to see you, ${userName.split(" ")[0]}` : `How can I help?`}
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 19, fontWeight: 900, color: "#fff", marginBottom: 7 }}>
+                {userName ? `Hey ${userName.split(" ")[0]} 👋` : "How can I help?"}
               </div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
-                I'm {auraName} — your personal AI OS powered by Claude.
-              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", lineHeight: 1.6 }}>Ask me anything — type, speak, or attach a file.</div>
             </div>
-
-            {/* Capability cards 2×2 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, width: "100%" }}>
-              {CAPABILITIES.map((cap, i) => (
-                <div key={i} onClick={() => send(cap.title)}
-                  style={{ padding: "14px 14px", background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 14, cursor: "pointer", transition: "border-color 0.2s, background 0.2s" }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.cyan + "55"; e.currentTarget.style.background = "rgba(0,255,229,0.04)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}>
-                  <div style={{ fontSize: 20, marginBottom: 5 }}>{cap.icon}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", marginBottom: 2 }}>{cap.title}</div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", lineHeight: 1.4 }}>{cap.desc}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Quick prompts */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
               {QUICK.map((q, i) => (
-                <div key={i} onClick={() => send(q)}
-                  style={{ padding: "5px 13px", background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: 10.5, color: "rgba(255,255,255,0.38)", cursor: "pointer", transition: "all 0.15s" }}
-                  onMouseEnter={e => { e.currentTarget.style.color = "rgba(255,255,255,0.7)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.38)"; e.currentTarget.style.borderColor = C.border; }}>
-                  {q}
-                </div>
+                <div key={i} onClick={() => send(q)} style={{ padding: "6px 14px", background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: 11, color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>{q}</div>
               ))}
             </div>
           </div>
-
         ) : (
-
-          /* ── MESSAGES ── */
-          <div style={{ flex: 1, padding: "24px 16px 8px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 760, margin: "0 auto", width: "100%" }}>
+          <div style={{ flex: 1, padding: "20px 14px 8px", display: "flex", flexDirection: "column", gap: 22, maxWidth: 760, margin: "0 auto", width: "100%" }}>
             {msgs.map((m, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, justifyContent: m.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start" }}>
-
-                {/* Assistant avatar */}
-                {m.role === "assistant" && (
-                  <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, marginTop: 2 }}>◈</div>
-                )}
-
-                <div style={{ maxWidth: m.role === "user" ? "72%" : "84%" }}>
+              <div key={i} style={{ display: "flex", gap: 10, justifyContent: m.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start" }}>
+                {m.role === "assistant" && <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, marginTop: 2 }}>◈</div>}
+                <div style={{ maxWidth: m.role === "user" ? "75%" : "86%" }}>
                   {(!m.type || m.type === "text") && (
                     <>
-                      <div style={{
-                        padding: m.role === "user" ? "10px 16px" : "0",
-                        borderRadius: m.role === "user" ? "18px 18px 4px 18px" : 0,
-                        background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent",
-                        border: m.role === "user" ? `1px solid ${C.purple}44` : "none",
-                        fontSize: 13.5,
-                        color: "rgba(255,255,255,0.9)",
-                        fontFamily: "'Inter','DM Mono',sans-serif",
-                        letterSpacing: 0.1,
-                      }}>
-                        {m.role === "user"
-                          ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span>
-                          : <Markdown text={m.content} />
-                        }
-                        {m.streaming && (
-                          <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />
-                        )}
+                      {m.imagePreview && <div style={{ marginBottom: 8, borderRadius: 12, overflow: "hidden", maxWidth: 200 }}><img src={m.imagePreview} alt="attachment" style={{ width: "100%", display: "block" }} /></div>}
+                      <div style={{ padding: m.role === "user" ? "10px 15px" : "0", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : 0, background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent", border: m.role === "user" ? `1px solid ${C.purple}44` : "none", fontSize: 13.5, color: "rgba(255,255,255,0.9)", fontFamily: "'Inter','DM Mono',sans-serif" }}>
+                        {m.role === "user" ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span> : <Markdown text={m.content} />}
+                        {m.streaming && <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />}
                       </div>
                       {m.role === "assistant" && !m.streaming && m.content && (
-                        <div style={{ display: "flex", gap: 5, marginTop: 8 }}>
-                          <button onClick={() => copyMsg(m.content, i)} style={{ background: copied === i ? `${C.green}18` : "rgba(255,255,255,0.04)", border: `1px solid ${copied === i ? C.green + "44" : "rgba(255,255,255,0.07)"}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontSize: 10, color: copied === i ? C.green : "rgba(255,255,255,0.3)" }}>
-                            {copied === i ? "✓ Copied" : "⧉ Copy"}
-                          </button>
-                          <button onClick={() => speakFull(m.content)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>🔊</button>
+                        <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
+                          <button onClick={() => copyMsg(m.content, i)} style={{ background: copied === i ? `${C.green}18` : "rgba(255,255,255,0.04)", border: `1px solid ${copied === i ? C.green + "44" : "rgba(255,255,255,0.07)"}`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: copied === i ? C.green : "rgba(255,255,255,0.3)" }}>{copied === i ? "✓" : "⧉"}</button>
+                          <button onClick={() => speakFull(m.content)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>🔊</button>
                         </div>
                       )}
                     </>
                   )}
-
                   {(m.type === "image" || m.type === "preview") && (
                     <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${m.type === "preview" ? C.purple + "44" : C.cyan + "33"}` }}>
-                      <div style={{ padding: "6px 12px", fontSize: 11, color: m.type === "preview" ? C.purple : C.cyan, background: m.type === "preview" ? `${C.purple}10` : `${C.cyan}08`, display: "flex", alignItems: "center", gap: 6 }}>
-                        {m.type === "preview" ? "💻 Preview" : "🎨 Generated Image"}
-                        <button onClick={() => copyMsg(m.imageUrl, i + 9999)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 10 }}>⧉</button>
+                      <div style={{ padding: "6px 12px", fontSize: 10, color: m.type === "preview" ? C.purple : C.cyan, background: m.type === "preview" ? `${C.purple}10` : `${C.cyan}08`, display: "flex" }}>
+                        {m.type === "preview" ? "💻 Preview" : "🎨 Image"}
+                        <a href={m.imageUrl} target="_blank" rel="noreferrer" style={{ marginLeft: "auto", color: C.cyan, textDecoration: "none" }}>⬇ Save</a>
                       </div>
-                      <img src={m.imageUrl} alt={m.caption} style={{ width: "100%", display: "block", minHeight: 100, background: "rgba(0,0,0,0.3)" }} onError={e => { e.target.style.opacity = "0.2"; }} />
-                      <div style={{ padding: "5px 12px", fontSize: 9, color: "rgba(255,255,255,0.25)" }}>{m.caption?.slice(0, 90)}</div>
+                      <img src={m.imageUrl} alt={m.caption} style={{ width: "100%", display: "block", minHeight: 80, background: "rgba(0,0,0,0.3)" }} onError={e => { e.target.style.opacity = "0.2"; }} />
                     </div>
                   )}
                 </div>
-
-                {/* User avatar */}
-                {m.role === "user" && (
-                  <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.purple}88,${C.cyan}44)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#fff", fontWeight: 700, marginTop: 2 }}>
-                    {userName ? userName[0].toUpperCase() : "U"}
-                  </div>
-                )}
+                {m.role === "user" && <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.purple}88,${C.cyan}44)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#fff", fontWeight: 700, marginTop: 2 }}>{userName ? userName[0].toUpperCase() : "U"}</div>}
               </div>
             ))}
-
-            {/* Thinking dots — only when not yet streaming */}
             {loading && !msgs.find(m => m.streaming) && (
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <div style={{ width: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>◈</div>
-                <div style={{ display: "flex", gap: 5, alignItems: "center", paddingTop: 6 }}>
-                  {[0, 1, 2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: C.cyan, animation: `pulse ${0.6 + i * 0.15}s infinite` }} />)}
+                <div style={{ display: "flex", gap: 5, alignItems: "center", paddingTop: 8 }}>
+                  {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: C.cyan, animation: `pulse ${0.6+i*0.15}s infinite` }} />)}
                 </div>
               </div>
             )}
@@ -384,35 +456,62 @@ Be helpful, use emojis naturally, keep responses clear and focused.`;
         )}
       </div>
 
-      {/* ── INPUT BAR ── */}
-      <div style={{ padding: "8px 16px 18px", borderTop: `1px solid ${C.border}`, flexShrink: 0, background: `${C.bg}f2`, backdropFilter: "blur(20px)" }}>
-        <div style={{ maxWidth: 760, margin: "0 auto" }}>
-          <div style={{
-            display: "flex", gap: 8, alignItems: "flex-end",
-            background: "rgba(255,255,255,0.05)",
-            border: `1.5px solid ${listening ? C.red + "77" : input.trim() ? C.cyan + "55" : C.cyan + "22"}`,
-            borderRadius: 18, padding: "10px 12px",
-            transition: "border-color 0.2s",
-            boxShadow: input.trim() ? `0 0 20px ${C.cyan}10` : "none",
-          }}>
-            <textarea ref={textareaRef} value={listening ? interimText : input} onChange={e => !listening && setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !listening) { e.preventDefault(); send(); } }}
-              placeholder={listening ? "Listening… speak now" : `Message ${auraName}…`}
-              rows={1}
-              style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
-            <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "flex-end", paddingBottom: 1 }}>
-              <button onClick={startVoice}
-                style={{ background: listening ? `${C.red}22` : "rgba(255,255,255,0.06)", border: `1px solid ${listening ? C.red + "55" : "rgba(255,255,255,0.1)"}`, borderRadius: 12, padding: "8px 10px", cursor: "pointer", fontSize: 16, animation: listening ? "pulse 1s infinite" : "none" }}>
-                {listening ? "🔴" : "🎙"}
-              </button>
-              <button onClick={() => send()} disabled={!input.trim() || loading}
-                style={{ background: input.trim() && !loading ? `linear-gradient(135deg,${C.cyan},${C.purple})` : "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, padding: "8px 16px", cursor: input.trim() && !loading ? "pointer" : "default", fontSize: 14, color: input.trim() && !loading ? "#000" : "rgba(255,255,255,0.2)", fontWeight: 800, transition: "all 0.2s" }}>
-                ▶
-              </button>
+      {/* ── PLUS BOTTOM SHEET ── */}
+      {showPlus && (
+        <>
+          <div onClick={() => setShowPlus(false)} style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.45)" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 41, background: "#0d0d0d", borderRadius: "20px 20px 0 0", padding: "14px 8px 28px", border: `1px solid ${C.border}` }}>
+            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.12)", borderRadius: 2, margin: "0 auto 14px" }} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4 }}>
+              {PLUS_OPTIONS.map(opt => (
+                <div key={opt.id} onClick={() => handlePlusOption(opt.id)}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 6px", cursor: "pointer", borderRadius: 12 }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: opt.id === "think" && thinkMode ? `${C.gold}22` : "rgba(255,255,255,0.07)", border: `1px solid ${opt.id === "think" && thinkMode ? C.gold + "55" : "rgba(255,255,255,0.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{opt.icon}</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>{opt.label}</div>
+                </div>
+              ))}
             </div>
           </div>
-          <div style={{ textAlign: "center", fontSize: 9, color: "rgba(255,255,255,0.12)", marginTop: 5 }}>
-            {auraName} can make mistakes. Verify important info. — Created by CEO Global
+        </>
+      )}
+
+      {/* ── INPUT BAR ── */}
+      <div style={{ padding: "8px 12px 18px", borderTop: `1px solid ${C.border}`, flexShrink: 0, background: `${C.bg}f4`, backdropFilter: "blur(20px)" }}>
+        {attachment && (
+          <div style={{ maxWidth: 760, margin: "0 auto 8px", display: "flex", alignItems: "center", gap: 8 }}>
+            {attachment.preview
+              ? <img src={attachment.preview} alt="attach" style={{ height: 48, borderRadius: 8, border: `1px solid ${C.border}` }} />
+              : <div style={{ fontSize: 11, color: C.cyan, background: `${C.cyan}15`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "4px 10px" }}>📎 {attachment.file.name}</div>}
+            <button onClick={() => setAttachment(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 16 }}>✕</button>
+          </div>
+        )}
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <div style={{ display: "flex", gap: 7, alignItems: "flex-end", background: "rgba(255,255,255,0.05)", border: `1.5px solid ${voiceState === "dictating" ? C.green + "77" : input.trim() || attachment ? C.cyan + "55" : C.cyan + "18"}`, borderRadius: 20, padding: "8px 10px", transition: "border-color 0.2s" }}>
+            <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+              {showPlus ? "×" : "+"}
+            </button>
+            <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
+              rows={1}
+              style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
+            <button onClick={voiceMode ? deactivateVoiceMode : startDictation}
+              style={{ background: voiceMode ? `${C.green}22` : voiceState === "dictating" ? `${C.red}22` : "rgba(255,255,255,0.06)", border: `1px solid ${voiceMode ? C.green + "55" : voiceState === "dictating" ? C.red + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: voiceMode || voiceState === "dictating" ? "pulse 1.2s infinite" : "none" }}>
+              {voiceMode ? "🟢" : voiceState === "dictating" ? "🔴" : "🎙"}
+            </button>
+            <button onClick={() => voiceMode ? activateVoiceMode() : send()} disabled={(!input.trim() && !attachment) || loading}
+              style={{ background: (input.trim() || attachment) && !loading ? `linear-gradient(135deg,${C.cyan},${C.purple})` : "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 36, height: 36, cursor: (input.trim() || attachment) && !loading ? "pointer" : "default", fontSize: 15, color: (input.trim() || attachment) && !loading ? "#000" : "rgba(255,255,255,0.2)", fontWeight: 800, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
+              ▶
+            </button>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 6 }}>
+            <button onClick={activateVoiceMode} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 10, fontFamily: "'DM Mono',monospace" }}>
+              🎙 Hold conversation
+            </button>
+            <span style={{ color: "rgba(255,255,255,0.08)", fontSize: 10 }}>·</span>
+            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.1)" }}>{auraName} · CEO Global</span>
           </div>
         </div>
       </div>

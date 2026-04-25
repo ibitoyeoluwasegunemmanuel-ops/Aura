@@ -4,28 +4,20 @@ function getVoice() {
       || voices.find(x => x.lang.startsWith("en"));
 }
 
-export function speak(text) {
-  if (!window.speechSynthesis) return;
+export function speakFull(text, onDone) {
+  if (!window.speechSynthesis) { onDone?.(); return; }
   window.speechSynthesis.cancel();
-  const clean = text.replace(/[*#`[\]]/g, "").trim();
-  const u = new SpeechSynthesisUtterance(clean.slice(0, 300));
-  u.rate = 1.05; u.pitch = 1.1;
-  const v = getVoice(); if (v) u.voice = v;
-  window.speechSynthesis.speak(u);
-}
-
-export function speakFull(text) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const clean = text.replace(/[*#`[\]]/g, "").trim();
+  const clean = text.replace(/[*#`[\]>_]/g, "").trim();
+  if (!clean) { onDone?.(); return; }
   const sentences = clean.match(/[^.!?\n]+[.!?\n]*/g) || [clean];
-  let i = 0;
+  let idx = 0;
   const next = () => {
-    if (i >= sentences.length) return;
-    const u = new SpeechSynthesisUtterance(sentences[i].trim());
+    if (idx >= sentences.length) { onDone?.(); return; }
+    const u = new SpeechSynthesisUtterance(sentences[idx++].trim());
     u.rate = 1.05; u.pitch = 1.1;
     const v = getVoice(); if (v) u.voice = v;
-    u.onend = () => { i++; next(); };
+    u.onend = next;
+    u.onerror = next;
     window.speechSynthesis.speak(u);
   };
   next();
