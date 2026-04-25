@@ -74,8 +74,8 @@ function renderInline(text) {
   return parts.length ? parts : text;
 }
 
-export default function ChatScreen({ auraName, session }) {
-  const [msgs, setMsgs]               = useState([]);
+export default function ChatScreen({ auraName, authSession, chatSessionId, onSessionUpdate }) {
+  const [msgs, setMsgs]               = useState(() => sto.get("msgs_" + chatSessionId, []));
   const [input, setInput]             = useState("");
   const [loading, setLoading]         = useState(false);
   const [voiceMode, setVoiceMode]     = useState(false);
@@ -100,7 +100,7 @@ export default function ChatScreen({ auraName, session }) {
   useEffect(() => { msgsRef.current = msgs; }, [msgs]);
 
   const userProfile = sto.get("user_profile", null);
-  const userName    = userProfile?.name || session?.name || null;
+  const userName    = userProfile?.name || authSession?.name || null;
 
   const SYSTEM = `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
@@ -192,7 +192,9 @@ Special commands (emit on own line when relevant):
       const clean = full.replace(CMD_RE, "").trim();
       setMsgs(m => {
         const updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
-        sto.set("chat_history", updated.filter(x => x.type === "text").map(x => ({ role: x.role, content: x.content })).slice(-20));
+        sto.set("msgs_" + chatSessionId, updated);
+        const first = updated.find(x => x.role === "user")?.content || "";
+        onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Voice chat", clean.slice(0, 60));
         return updated;
       });
       setVoiceState("speaking");
@@ -333,7 +335,9 @@ Special commands (emit on own line when relevant):
       setMsgs(m => {
         let updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
         if (extra.length) updated = [...updated, ...extra];
-        sto.set("chat_history", updated.filter(x => x.type === "text").map(x => ({ role: x.role, content: x.content })).slice(-20));
+        sto.set("msgs_" + chatSessionId, updated);
+        const first = updated.find(x => x.role === "user")?.content || "";
+        onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Chat", clean.slice(0, 60));
         return updated;
       });
       speakFull(clean);
@@ -384,7 +388,6 @@ Special commands (emit on own line when relevant):
           {wakeOn ? `SAY "HEY ${auraName.toUpperCase()}" TO TALK` : "WAKE WORD STANDBY"}
         </span>
         {thinkMode && <span style={{ fontSize: 9, color: C.gold, background: `${C.gold}15`, border: `1px solid ${C.gold}33`, borderRadius: 6, padding: "1px 7px" }}>🧠 THINK</span>}
-        {hasMessages && <button onClick={() => { setMsgs([]); sto.set("chat_history", []); }} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 7, padding: "2px 8px", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono',monospace" }}>✕ New chat</button>}
       </div>
 
       {/* ── MESSAGES ── */}
