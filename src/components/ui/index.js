@@ -1,5 +1,10 @@
-export { default as Card } from "./Card";
-export { default as Btn }  from "./Btn";
-export { default as Tag }  from "./Tag";
-export { default as Lbl }  from "./Lbl";
-export { default as Inp }  from "./Inp";
+export { default as Card }     from "./Card";
+export { default as Btn }      from "./Btn";
+export { default as Tag }      from "./Tag";
+export { default as Lbl }      from "./Lbl";
+export { default as Inp }      from "./Inp";
+export { default as Toggle }   from "./Toggle";
+export { default as Badge }    from "./Badge";
+export { default as Spinner }  from "./Spinner";
+export { default as Progress } from "./Progress";
+export { default as Modal }    from "./Modal";

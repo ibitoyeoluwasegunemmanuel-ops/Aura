@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { C } from "../theme/colors";
-import { Card, Lbl } from "../components/ui";
+import { Card, Lbl, Toggle, Spinner } from "../components/ui";
 import { callClaude } from "../utils/api";
 import { speakFull } from "../utils/voice";
 import { LANGS } from "../data/languages";
@@ -67,19 +67,32 @@ export default function TranslateScreen() {
           placeholder="Type text or tap 🎙 to speak / hold near someone talking..."
           style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", color: "#fff", fontSize: 12, fontFamily: "'DM Mono',monospace", resize: "none", outline: "none", height: 70, lineHeight: 1.6 }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          <button onClick={listenOnce} style={{ background: loading ? `${C.red}20` : `${C.green}15`, border: `1px solid ${loading ? C.red + "44" : C.green + "44"}`, borderRadius: 9, padding: "10px 11px", cursor: "pointer", fontSize: 20, animation: loading ? "pulse 1s infinite" : "none" }}>{loading ? "⏳" : "🎙"}</button>
+          <button onClick={listenOnce} style={{ background: loading ? `${C.red}20` : `${C.green}15`, border: `1px solid ${loading ? C.red + "44" : C.green + "44"}`, borderRadius: 9, padding: "10px 11px", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44 }}>
+            {loading ? <Spinner color={C.green} size={18} /> : "🎙"}
+          </button>
           <button onClick={() => doTranslate(text)} style={{ background: `${C.green}15`, border: `1px solid ${C.green}44`, borderRadius: 9, padding: "10px 11px", cursor: "pointer", fontSize: 16, color: C.green }}>→</button>
         </div>
       </div>
 
-      <div onClick={toggleEar} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: earMode ? `${C.gold}10` : "rgba(255,255,255,0.02)", border: `1px solid ${earMode ? C.gold + "44" : C.border}`, borderRadius: 12, cursor: "pointer" }}>
-        <div style={{ fontSize: 22 }}>👂</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: earMode ? C.gold : "#fff" }}>{earMode ? "🔴 EAR MODE — tap to stop" : "Ear Mode — Listen to someone beside you"}</div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>Continuous live translation into your ears. Any language.</div>
+      <Card style={{ padding: "12px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: earMode ? 8 : 0 }}>
+          <span style={{ fontSize: 20 }}>👂</span>
+          <Toggle
+            on={earMode}
+            onToggle={toggleEar}
+            color={C.gold}
+            label={earMode ? "Ear Mode — Active" : "Ear Mode"}
+            desc="Continuous live translation into your ears. Any language."
+            style={{ flex: 1 }}
+          />
         </div>
-        <div style={{ width: 9, height: 9, borderRadius: "50%", background: earMode ? C.gold : "rgba(255,255,255,0.1)", boxShadow: earMode ? `0 0 10px ${C.gold}` : "none", animation: earMode ? "pulse 1s infinite" : "none" }} />
-      </div>
+        {earMode && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.gold}22` }}>
+            <Spinner color={C.gold} size={14} />
+            <span style={{ fontSize: 10, color: C.gold }}>Listening… speak near the mic</span>
+          </div>
+        )}
+      </Card>
 
       {result && (
         <Card color={C.cyan}>

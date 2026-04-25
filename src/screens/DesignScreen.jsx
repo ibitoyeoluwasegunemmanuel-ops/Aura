@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { C } from "../theme/colors";
-import { Card, Btn, Lbl } from "../components/ui";
+import { Card, Btn, Lbl, Spinner, Badge } from "../components/ui";
 import { callClaude, genImg } from "../utils/api";
 import { speakFull } from "../utils/voice";
 
@@ -78,19 +78,15 @@ export default function DesignScreen({ auraName }) {
             transition: "border-color 0.2s",
           }}
         />
-        <Btn color={C.purple} onClick={generate} disabled={loading || !prompt.trim()} style={{ width: "100%" }}>
-          {loading ? "✦ Designing…" : "✦ Generate Design"}
+        <Btn color={C.purple} onClick={generate} disabled={loading || !prompt.trim()} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          {loading ? <><Spinner color="#000" size={14} /> Designing…</> : "✦ Generate Design"}
         </Btn>
       </div>
 
       {/* Loading */}
       {loading && (
-        <div style={{ textAlign: "center", padding: "20px 0" }}>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 10 }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{ width: 9, height: 9, borderRadius: "50%", background: C.purple, animation: `pulse ${0.65 + i * 0.15}s ease-in-out infinite` }} />
-            ))}
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "20px 0" }}>
+          <Spinner color={C.purple} size={22} />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>{auraName} IS DESIGNING…</div>
         </div>
       )}
@@ -99,7 +95,10 @@ export default function DesignScreen({ auraName }) {
       {result && (
         <>
           <Card color={C.purple}>
-            <div style={{ fontSize: 9, color: C.purple, letterSpacing: 2, marginBottom: 8 }}>DESIGN BRIEF</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 9, color: C.purple, letterSpacing: 2 }}>DESIGN BRIEF</div>
+              <Badge color={C.green} dot>Ready</Badge>
+            </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", lineHeight: 1.75 }}>{result.brief}</div>
           </Card>
 

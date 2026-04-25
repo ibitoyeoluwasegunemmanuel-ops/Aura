@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C } from "../theme/colors";
-import { Card, Btn, Lbl, Inp } from "../components/ui";
+import { Card, Btn, Lbl, Inp, Toggle, Spinner, Badge } from "../components/ui";
 import { tasks } from "../utils/tasks";
 import { callClaude } from "../utils/api";
 import { speakFull } from "../utils/voice";
@@ -83,21 +83,23 @@ export default function AutomateScreen({ auraName }) {
     <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12, height: "100%", overflowY: "auto" }}>
       <Lbl color={C.purple}>⚡ Automation Engine</Lbl>
 
-      {/* Notification banner */}
-      {!notifOk && (
-        <div onClick={requestNotif} style={{ padding: "11px 14px", background: `${C.gold}08`, border: `1px solid ${C.gold}33`, borderRadius: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 20 }}>🔔</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gold }}>Enable Notifications</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>Let AURA send you reminders</div>
-          </div>
-          <span style={{ fontSize: 10, color: C.gold }}>Enable →</span>
-        </div>
-      )}
+      {/* Notifications toggle */}
+      <Card style={{ padding: "12px 14px" }}>
+        <Toggle
+          on={notifOk}
+          onToggle={notifOk ? undefined : requestNotif}
+          color={C.gold}
+          label="Reminders & Notifications"
+          desc={notifOk ? "AURA will notify you when tasks are due" : "Tap to allow so AURA can remind you"}
+        />
+      </Card>
 
       {/* AI Workflows */}
       <Card color={C.purple}>
-        <Lbl color={C.purple}>🤖 AI Workflows</Lbl>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <Lbl color={C.purple}>🤖 AI Workflows</Lbl>
+          {activeWf && <Badge color={C.purple} dot>{WORKFLOWS.find(w => w.action === activeWf)?.title}</Badge>}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 12 }}>
           {WORKFLOWS.map(w => (
             <div key={w.action} onClick={() => { setActiveWf(activeWf === w.action ? null : w.action); setAiOutput(""); setWfInput(""); }}
@@ -114,8 +116,8 @@ export default function AutomateScreen({ auraName }) {
             <textarea value={wfInput} onChange={e => setWfInput(e.target.value)}
               placeholder={`Describe what you need for "${WORKFLOWS.find(w => w.action === activeWf)?.title}"...`}
               rows={2} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.purple}44`, borderRadius: 10, padding: "10px 12px", color: "#fff", fontSize: 12, fontFamily: "'DM Mono',monospace", resize: "none", outline: "none", lineHeight: 1.5, width: "100%", boxSizing: "border-box" }} />
-            <Btn color={C.purple} onClick={runWorkflow} disabled={aiLoading} style={{ width: "100%" }}>
-              {aiLoading ? "⏳ Generating..." : "⚡ Generate"}
+            <Btn color={C.purple} onClick={runWorkflow} disabled={aiLoading} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              {aiLoading ? <><Spinner color="#000" size={14} /> Generating…</> : "⚡ Generate"}
             </Btn>
             {aiOutput && (
               <>
