@@ -92,12 +92,20 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const textareaRef  = useRef();
   const fileInputRef = useRef();
   const camInputRef  = useRef();
-  const listeningRef = useRef(false);
-  const voiceModeRef = useRef(false);
-  const voiceRecRef  = useRef(null);
-  const msgsRef      = useRef([]);
+  const listeningRef  = useRef(false);
+  const voiceModeRef  = useRef(false);
+  const voiceRecRef   = useRef(null);
+  const msgsRef       = useRef([]);
+  const micGrantedRef = useRef(false);
 
   useEffect(() => { msgsRef.current = msgs; }, [msgs]);
+
+  // Pre-grant mic on mount so wake word fires hands-free (no tap needed)
+  useEffect(() => {
+    navigator.mediaDevices?.getUserMedia({ audio: true })
+      .then(stream => { micGrantedRef.current = true; stream.getTracks().forEach(t => t.stop()); })
+      .catch(() => {});
+  }, []);
 
   const userProfile = sto.get("user_profile", null);
   const userName    = userProfile?.name || authSession?.name || null;
@@ -128,14 +136,18 @@ Special commands (emit on own line when relevant):
     if (!SR) return;
     const r = new SR(); r.continuous = true; r.interimResults = true; r.lang = "en-US";
     r.onstart  = () => setWakeOn(true);
-    r.onend    = () => { setWakeOn(false); if (!listeningRef.current) setTimeout(startWake, 600); };
+    r.onend    = () => { setWakeOn(false); if (!listeningRef.current) setTimeout(startWake, 500); };
     r.onresult = (e) => {
       const t = Array.from(e.results).map(x => x[0].transcript).join("").toLowerCase();
-      if (t.includes(`hey ${auraName.toLowerCase()}`) || t.includes(auraName.toLowerCase())) {
-        r.stop(); setTimeout(activateVoiceMode, 400);
-      }
+      const name = auraName.toLowerCase();
+      const triggered =
+        t.includes(`hey ${name}`) || t.includes(`okay ${name}`) ||
+        t.includes(`ok ${name}`)  || t.includes(name) ||
+        t.includes("let's go")   || t.includes("lets go") ||
+        t.includes("wake up")    || t.includes("hey wake");
+      if (triggered) { r.stop(); setTimeout(activateVoiceMode, 200); }
     };
-    r.onerror = (e) => { setWakeOn(false); if (e.error !== "aborted" && !listeningRef.current) setTimeout(startWake, 800); };
+    r.onerror = (e) => { setWakeOn(false); if (e.error !== "aborted" && !listeningRef.current) setTimeout(startWake, 600); };
     wakeRef.current = r;
     try { r.start(); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,9 +220,9 @@ Special commands (emit on own line when relevant):
   const activateVoiceMode = async () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Voice needs Chrome or Edge.", id: Date.now(), streaming: false }]); return; }
-    try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch {
-      setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Mic blocked — allow it in browser settings.", id: Date.now(), streaming: false }]);
-      return;
+    if (!micGrantedRef.current) {
+      try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); micGrantedRef.current = true; s.getTracks().forEach(t => t.stop()); }
+      catch { setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Mic blocked — allow it in browser settings.", id: Date.now(), streaming: false }]); return; }
     }
     wakeRef.current?.stop();
     voiceModeRef.current = true;
@@ -398,7 +410,7 @@ Special commands (emit on own line when relevant):
               <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1.5px solid ${C.cyan}44`, animation: "rotate 8s linear infinite" }} />
               <div style={{ position: "absolute", inset: 5, borderRadius: "50%", border: `1px solid ${C.purple}33`, animation: "rotate 12s linear infinite reverse" }} />
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: C.cyan }}>◈</div>
-              <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>TAP TO TALK</div>
+              <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: wakeOn ? C.green : "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>{wakeOn ? `SAY "HEY ${auraName.toUpperCase()}"` : "TAP OR SPEAK"}</div>
             </div>
             <div style={{ textAlign: "center", marginTop: 10 }}>
               <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 19, fontWeight: 900, color: "#fff", marginBottom: 7 }}>
