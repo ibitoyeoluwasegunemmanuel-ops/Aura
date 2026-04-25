@@ -95,7 +95,6 @@ export default function AuraOS() {
           <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
             {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </div>
-          <button onClick={() => setMinimized(true)} title="Minimize to bubble" style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border}`, borderRadius: 9, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "rgba(255,255,255,0.3)", lineHeight: 1 }}>—</button>
         </div>
       </div>
 
@@ -118,6 +117,29 @@ export default function AuraOS() {
             {tab === t.id && <div style={{ width: 12, height: 2, background: C.cyan, borderRadius: 1 }} />}
           </div>
         ))}
+      </div>
+
+      {/* Persistent floating chat-head bubble */}
+      <div
+        onClick={() => setMinimized(true)}
+        title="Minimize AURA"
+        style={{
+          position: "fixed", bottom: 88, right: 14, zIndex: 9999,
+          width: 46, height: 46,
+          background: `linear-gradient(135deg,${C.cyan}cc,${C.purple}cc)`,
+          borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+          fontSize: 18, color: "#fff",
+          boxShadow: `0 4px 18px ${C.cyan}55`,
+          backdropFilter: "blur(10px)",
+          animation: "pulse 4s ease-in-out infinite",
+          transition: "transform 0.15s",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.12)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+      >
+        ◈
       </div>
     </div>
   );
