@@ -3,6 +3,7 @@ import { C }   from "./theme/colors";
 import { CSS }  from "./theme/css";
 import { sto }  from "./utils/storage";
 import { auth } from "./utils/auth";
+import { Modal, Progress } from "./components/ui";
 import AuthScreen      from "./screens/AuthScreen";
 import AdminDashboard  from "./screens/AdminDashboard";
 import ChatScreen      from "./screens/ChatScreen";
@@ -28,6 +29,7 @@ export default function AuraOS() {
   const [activeSid, setActiveSid]   = useState(() => initSessions()[0].id);
   const [view, setView]             = useState("chat");
   const [time, setTime]             = useState(new Date());
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -130,8 +132,14 @@ export default function AuraOS() {
               <div style={{ fontSize: 8, color: "rgba(255,255,255,0.18)", marginTop: 1 }}>AI OS · LIVE</div>
             </div>
             {session?.name && (
-              <div style={{ marginLeft: "auto", fontSize: 9, color: "rgba(255,255,255,0.3)", maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {session.name.split(" ")[0]}
+              <div onClick={() => setShowProfile(true)} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7, cursor: "pointer", padding: "4px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, transition: "background 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+              >
+                <div style={{ width: 22, height: 22, borderRadius: "50%", background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: "#000", flexShrink: 0 }}>
+                  {session.name[0].toUpperCase()}
+                </div>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", maxWidth: 60, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.name.split(" ")[0]}</span>
               </div>
             )}
           </div>
@@ -237,6 +245,57 @@ export default function AuraOS() {
           )}
         </div>
       </div>
+
+      {/* ── PROFILE POPUP ── */}
+      <Modal open={showProfile} onClose={() => setShowProfile(false)} color={C.cyan} title="Your Profile">
+        {session && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: "#000", flexShrink: 0 }}>
+                {session.name?.[0]?.toUpperCase() || "U"}
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 3 }}>{session.name}</div>
+                {session.email && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>{session.email}</div>}
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 5, padding: "2px 10px", borderRadius: 20, background: `${C.green}15`, border: `1px solid ${C.green}33` }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
+                  <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>{session.role === "guest" ? "Free" : session.role || "User"} Plan</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 12, overflow: "hidden" }}>
+              {[
+                { label: "Plan",     value: session.role === "guest" ? "Free" : (session.role || "User"), color: C.green },
+                { label: "AI Model", value: "Claude Sonnet 4",     color: C.cyan   },
+                { label: "Voice",    value: "Enabled",              color: C.purple },
+                { label: "Memory",   value: "Active",               color: C.gold   },
+              ].map(({ label, value, color }, i, arr) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>{label}</span>
+                  <span style={{ fontSize: 13, color, fontWeight: 700 }}>{value}</span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>Usage this month</div>
+              <Progress value={42} color={C.cyan} label="Conversations" />
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setShowProfile(false); setView("settings"); setSidebarOpen(false); }}
+                style={{ flex: 1, background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 10, padding: "10px", cursor: "pointer", fontSize: 12, color: C.cyan, fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>
+                ⚙ Settings
+              </button>
+              <button onClick={() => { handleLogout(); setShowProfile(false); }}
+                style={{ flex: 1, background: `${C.red}12`, border: `1px solid ${C.red}33`, borderRadius: 10, padding: "10px", cursor: "pointer", fontSize: 12, color: C.red, fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>
+                🚪 Sign Out
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
