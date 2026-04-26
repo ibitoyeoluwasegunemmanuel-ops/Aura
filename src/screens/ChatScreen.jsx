@@ -74,7 +74,7 @@ function renderInline(text) {
   return parts.length ? parts : text;
 }
 
-export default function ChatScreen({ auraName, authSession, chatSessionId, onSessionUpdate, agentMode }) {
+export default function ChatScreen({ auraName, authSession, chatSessionId, onSessionUpdate, agentMode, modePrompt }) {
   const [msgs, setMsgs]               = useState(() => sto.get("msgs_" + chatSessionId, []));
   const [input, setInput]             = useState("");
   const [loading, setLoading]         = useState(false);
@@ -125,6 +125,7 @@ Special commands (emit on own line when relevant):
 [OPEN: url] — open website`
     : `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
+${modePrompt ? `\n${modePrompt}` : ""}
 ${userProfile?.name ? `\nUser's name: ${userProfile.name}. Role: ${userProfile.role || ""}. Preferences: ${userProfile.preferences || ""}. Projects: ${userProfile.projects || ""}.` : ""}
 
 Response style: Be direct. Say "Here's what you need:" not "Here is the answer...". Sound natural and confident. Use emojis naturally.

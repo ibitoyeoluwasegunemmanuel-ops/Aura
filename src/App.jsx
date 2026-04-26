@@ -10,6 +10,13 @@ import ChatScreen      from "./screens/ChatScreen";
 import SettingsScreen  from "./screens/SettingsScreen";
 import AgentsScreen    from "./screens/AgentsScreen";
 
+const MODES = [
+  { id: "chat",     icon: "💬", name: "AURA Chat",    label: "General AI",    color: C.cyan,    prompt: "" },
+  { id: "code",     icon: "⌨️",  name: "AURA Code",    label: "Dev & Debug",   color: "#4ade80", prompt: "You are AURA Code — an expert software engineer. Prioritise clean, working code. Always show code blocks. Explain your reasoning briefly." },
+  { id: "design",   icon: "🎨", name: "AURA Design",  label: "UI & Creative", color: C.purple,  prompt: "You are AURA Design — a world-class UI/UX designer and creative director. Think visually, suggest layouts, colours, and user experiences. Be specific and inspiring." },
+  { id: "research", icon: "🔬", name: "AURA Research", label: "Deep Analysis", color: C.gold,    prompt: "You are AURA Research — a rigorous analyst and researcher. Provide detailed, sourced, well-structured answers. Use bullet points and section headers. Be thorough." },
+];
+
 function makeSid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 function initSessions() {
@@ -32,6 +39,7 @@ export default function AuraOS() {
   const [time, setTime]             = useState(new Date());
   const [showProfile, setShowProfile] = useState(false);
   const [agentMode, setAgentMode]     = useState(null);
+  const [chatMode, setChatMode]       = useState(() => sto.get("aura_chat_mode", "chat"));
   const touchStartX = useRef(0);
 
   useEffect(() => {
@@ -67,6 +75,18 @@ export default function AuraOS() {
   const handleName   = n => { setAuraName(n); sto.set("aura_name", n); };
   const handleLogin  = s => setSession(s);
   const handleLogout = () => { auth.logout(); setSession(null); };
+
+  const switchMode = (mode) => {
+    setChatMode(mode.id);
+    sto.set("aura_chat_mode", mode.id);
+    const id = makeSid();
+    const s = { id, title: mode.id === "chat" ? "New Chat" : mode.name, preview: mode.label, updatedAt: Date.now() };
+    setSessions(prev => { const u = [s, ...prev]; sto.set("aura_sessions", u); return u; });
+    setActiveSid(id);
+    setAgentMode(null);
+    setView("chat");
+    setSidebarOpen(false);
+  };
 
   const newChat = () => {
     const id = makeSid();
@@ -138,7 +158,7 @@ export default function AuraOS() {
   );
 
   return (
-    <div style={{ height: "100vh", background: C.bg, fontFamily: "'DM Mono',monospace", color: "#fff", display: "flex", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100dvh", minHeight: "-webkit-fill-available", background: C.bg, fontFamily: "'DM Mono',monospace", color: "#fff", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
       <style>{CSS}</style>
 
       {/* Background grid */}
@@ -193,6 +213,27 @@ export default function AuraOS() {
           </button>
         </div>
 
+        {/* AURA Modes */}
+        <div style={{ padding: "10px 8px 6px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", letterSpacing: 2, padding: "0 8px 8px", textTransform: "uppercase" }}>Modes</div>
+          {MODES.map(mode => {
+            const active = chatMode === mode.id && !agentMode && view === "chat";
+            return (
+              <button key={mode.id} onClick={() => switchMode(mode)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 10, cursor: "pointer", background: active ? `${mode.color}18` : "transparent", border: `1px solid ${active ? mode.color + "33" : "transparent"}`, marginBottom: 2, fontFamily: "'DM Mono',monospace", transition: "all 0.15s", textAlign: "left" }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = active ? `${mode.color}18` : "transparent"; }}
+              >
+                <span style={{ fontSize: 17, flexShrink: 0 }}>{mode.icon}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: active ? mode.color : "rgba(255,255,255,0.8)", fontWeight: active ? 700 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mode.name}</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>{mode.label}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Sessions list */}
         <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px" }}>
           {sessions.length > 0 && (
@@ -240,20 +281,27 @@ export default function AuraOS() {
       </div>
 
       {/* ── MAIN CONTENT ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minWidth: 0, position: "relative", zIndex: 1 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, position: "relative", zIndex: 1 }}>
 
         {/* Top bar */}
         <div style={{ padding: "9px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 9, flexShrink: 0, background: `${C.bg}f2`, backdropFilter: "blur(20px)", zIndex: 10, position: "relative" }}>
 
-          {/* ← always visible back / menu button */}
-          <button
-            onClick={() => {
-              if (view !== "chat") { goBack(); }
-              else if (agentMode) { setView("agents"); }
-              else { setSidebarOpen(s => !s); }
-            }}
-            style={{ background: `${C.cyan}10`, border: `1px solid ${C.cyan}33`, borderRadius: 9, padding: "7px 13px", cursor: "pointer", color: C.cyan, fontSize: 20, lineHeight: 1, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", minWidth: 44 }}
-          >←</button>
+          {/* ≡ menu OR ← back button */}
+          {(() => {
+            const isBack = view !== "chat" || !!agentMode;
+            return (
+              <button
+                onClick={() => {
+                  if (view !== "chat") { goBack(); }
+                  else if (agentMode) { setView("agents"); }
+                  else { setSidebarOpen(s => !s); }
+                }}
+                style={{ background: isBack ? `${C.cyan}10` : `${C.cyan}18`, border: `1px solid ${C.cyan}44`, borderRadius: 9, padding: "7px 12px", cursor: "pointer", color: C.cyan, fontSize: isBack ? 20 : 22, lineHeight: 1, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", minWidth: 44, flexShrink: 0 }}
+              >
+                {isBack ? "←" : "≡"}
+              </button>
+            );
+          })()}
 
           <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {activeTitle}
@@ -278,6 +326,7 @@ export default function AuraOS() {
               chatSessionId={activeSid}
               onSessionUpdate={updateSession}
               agentMode={agentMode}
+              modePrompt={agentMode ? "" : (MODES.find(m => m.id === chatMode)?.prompt || "")}
             />
           )}
           {view === "settings" && (
