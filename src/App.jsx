@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { C }   from "./theme/colors";
 import { CSS }  from "./theme/css";
 import { sto }  from "./utils/storage";
@@ -30,11 +30,37 @@ export default function AuraOS() {
   const [view, setView]             = useState("chat");
   const [time, setTime]             = useState(new Date());
   const [showProfile, setShowProfile] = useState(false);
+  const touchStartX = useRef(0);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Android back button support
+  useEffect(() => {
+    if (view !== "chat") window.history.pushState({ view }, "");
+  }, [view]);
+  useEffect(() => {
+    const onPop = () => setView("chat");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // iOS swipe-right from left edge to go back
+  useEffect(() => {
+    const onStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+    const onEnd   = (e) => {
+      if (e.changedTouches[0].clientX - touchStartX.current > 72 && touchStartX.current < 36 && view !== "chat") {
+        setView("chat");
+      }
+    };
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchend",   onEnd,   { passive: true });
+    return () => { window.removeEventListener("touchstart", onStart); window.removeEventListener("touchend", onEnd); };
+  }, [view]);
+
+  const goBack = () => setView("chat");
 
   const handleName   = n => { setAuraName(n); sto.set("aura_name", n); };
   const handleLogin  = s => setSession(s);
@@ -182,17 +208,18 @@ export default function AuraOS() {
         {/* Sidebar footer */}
         <div style={{ padding: "10px 8px 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
           {[
-            { id: "settings", icon: "⚙", label: "Settings", color: "rgba(255,255,255,0.6)" },
-            { id: "admin",    icon: "🔐", label: "Admin",    color: C.red + "cc" },
+            { id: "settings", icon: "⚙", label: "Settings", color: "rgba(255,255,255,0.7)" },
+            { id: "admin",    icon: "🔐", label: "Admin",    color: C.red },
           ].map(item => (
-            <div key={item.id} onClick={() => { setView(item.id); setSidebarOpen(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 10px", borderRadius: 10, cursor: "pointer", background: view === item.id ? "rgba(255,255,255,0.06)" : "transparent", marginBottom: 2, transition: "background 0.15s" }}
-              onMouseEnter={e => { if (view !== item.id) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+            <button key={item.id}
+              onClick={() => { setView(item.id); setSidebarOpen(false); }}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 10px", borderRadius: 10, cursor: "pointer", background: view === item.id ? "rgba(255,255,255,0.08)" : "transparent", marginBottom: 2, border: "none", fontFamily: "'DM Mono',monospace", transition: "background 0.15s" }}
+              onMouseEnter={e => { if (view !== item.id) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
               onMouseLeave={e => { if (view !== item.id) e.currentTarget.style.background = "transparent"; }}
             >
               <span style={{ fontSize: 15 }}>{item.icon}</span>
-              <span style={{ fontSize: 12, color: item.color }}>{item.label}</span>
-            </div>
+              <span style={{ fontSize: 13, color: item.color, fontWeight: 600 }}>{item.label}</span>
+            </button>
           ))}
         </div>
       </div>
@@ -202,9 +229,18 @@ export default function AuraOS() {
 
         {/* Top bar */}
         <div style={{ padding: "9px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 9, flexShrink: 0, background: `${C.bg}f2`, backdropFilter: "blur(20px)", zIndex: 10, position: "relative" }}>
-          <button onClick={() => setSidebarOpen(s => !s)}
-            style={{ background: sidebarOpen ? `${C.cyan}12` : "rgba(255,255,255,0.05)", border: `1px solid ${sidebarOpen ? C.cyan + "33" : C.border}`, borderRadius: 9, padding: "6px 10px", cursor: "pointer", color: sidebarOpen ? C.cyan : "rgba(255,255,255,0.4)", fontSize: 17, lineHeight: 1, transition: "all 0.15s" }}
-          >≡</button>
+
+          {view !== "chat" ? (
+            /* Back button when in Settings / Admin */
+            <button onClick={goBack}
+              style={{ background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 9, padding: "6px 13px", cursor: "pointer", color: C.cyan, fontSize: 16, lineHeight: 1, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}
+            >← <span style={{ fontSize: 11 }}>Back</span></button>
+          ) : (
+            /* Hamburger — always visible in chat */
+            <button onClick={() => setSidebarOpen(s => !s)}
+              style={{ background: sidebarOpen ? `${C.cyan}18` : `${C.cyan}08`, border: `1px solid ${sidebarOpen ? C.cyan + "55" : C.cyan + "22"}`, borderRadius: 9, padding: "7px 11px", cursor: "pointer", color: sidebarOpen ? C.cyan : C.cyan + "bb", fontSize: 18, lineHeight: 1, transition: "all 0.15s" }}
+            >≡</button>
+          )}
 
           <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {activeTitle}
