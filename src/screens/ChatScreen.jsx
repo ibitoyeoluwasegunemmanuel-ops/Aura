@@ -74,7 +74,7 @@ function renderInline(text) {
   return parts.length ? parts : text;
 }
 
-export default function ChatScreen({ auraName, authSession, chatSessionId, onSessionUpdate }) {
+export default function ChatScreen({ auraName, authSession, chatSessionId, onSessionUpdate, agentMode }) {
   const [msgs, setMsgs]               = useState(() => sto.get("msgs_" + chatSessionId, []));
   const [input, setInput]             = useState("");
   const [loading, setLoading]         = useState(false);
@@ -110,7 +110,20 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const userProfile = sto.get("user_profile", null);
   const userName    = userProfile?.name || authSession?.name || null;
 
-  const SYSTEM = `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
+  const SYSTEM = agentMode
+    ? `${agentMode.prompt}
+
+${FOUNDER_SYSTEM_BLOCK}
+${userProfile?.name ? `\nUser's name: ${userProfile.name}. Role: ${userProfile.role || ""}. Preferences: ${userProfile.preferences || ""}. Projects: ${userProfile.projects || ""}.` : ""}
+
+Response style: Be direct and expert. Sound natural and confident. Use emojis naturally.
+
+Special commands (emit on own line when relevant):
+[IMAGE: description] — generate image
+[PREVIEW: description] — build UI/website
+[LOCATION] — get GPS
+[OPEN: url] — open website`
+    : `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
 ${userProfile?.name ? `\nUser's name: ${userProfile.name}. Role: ${userProfile.role || ""}. Preferences: ${userProfile.preferences || ""}. Projects: ${userProfile.projects || ""}.` : ""}
 
@@ -405,12 +418,23 @@ Special commands (emit on own line when relevant):
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: C.cyan }}>◈</div>
               <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: wakeOn ? C.green : "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>{wakeOn ? `SAY "HEY ${auraName.toUpperCase()}"` : "TAP OR SPEAK"}</div>
             </div>
-            <div style={{ textAlign: "center", marginTop: 10 }}>
-              <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 19, fontWeight: 900, color: "#fff", marginBottom: 7 }}>
-                {userName ? `Hey ${userName.split(" ")[0]} 👋` : "How can I help?"}
+            {agentMode ? (
+              <div style={{ textAlign: "center", marginTop: 10, width: "100%", maxWidth: 340 }}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>{agentMode.emoji}</div>
+                <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 16, fontWeight: 900, color: "#fff", marginBottom: 6 }}>{agentMode.name}</div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 12px", borderRadius: 20, background: `${C.cyan}18`, border: `1px solid ${C.cyan}44`, marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: C.cyan, fontWeight: 700 }}>{agentMode.industry}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.7 }}>{agentMode.description}</div>
               </div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", lineHeight: 1.6 }}>Ask me anything — type, speak, or attach a file.</div>
-            </div>
+            ) : (
+              <div style={{ textAlign: "center", marginTop: 10 }}>
+                <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 19, fontWeight: 900, color: "#fff", marginBottom: 7 }}>
+                  {userName ? `Hey ${userName.split(" ")[0]} 👋` : "How can I help?"}
+                </div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", lineHeight: 1.6 }}>Ask me anything — type, speak, or attach a file.</div>
+              </div>
+            )}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
               {QUICK.map((q, i) => (
                 <div key={i} onClick={() => send(q)} style={{ padding: "6px 14px", background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: 11, color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>{q}</div>
