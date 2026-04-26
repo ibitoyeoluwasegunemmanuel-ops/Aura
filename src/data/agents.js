@@ -4,6 +4,10 @@ export const AGENT_CATEGORIES = [
   "Real Estate","Agriculture","Energy","Travel","Gaming",
   "Manufacturing","Supply Chain","Transportation","Marketing","Research","Productivity",
   "Architecture","Fashion","Food & Beverage","Media","Non-Profit","Sports","Automotive",
+  "Technology","AI & Automation","Writing & Content","Business Strategy","Environment",
+  "Science","Parenting","Pets & Animals","Photography & Video","Graphic Design",
+  "Music","Wellness","Psychology","Language","Spirituality","Politics & Governance",
+  "Personal Development","Crypto & Web3","SaaS & Tech Startups","Social Impact",
 ];
 
 export const AGENTS = [
