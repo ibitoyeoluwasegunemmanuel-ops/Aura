@@ -242,24 +242,26 @@ Special commands (emit on own line when relevant):
   const startDictation = async () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
-    try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return; }
+    if (!micGrantedRef.current) {
+      try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); micGrantedRef.current = true; s.getTracks().forEach(t => t.stop()); }
+      catch { return; }
+    }
     wakeRef.current?.stop();
     listeningRef.current = true;
-    const r = new SR(); r.lang = "en-US"; r.interimResults = true;
-    r.onstart = () => setVoiceState("dictating");
+    setVoiceState("dictating");
+    const r = new SR(); r.lang = "en-US"; r.interimResults = false; r.maxAlternatives = 1;
+    let got = "";
     r.onresult = (e) => {
-      const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join("");
-      const final   = Array.from(e.results).filter(x =>  x.isFinal).map(x => x[0].transcript).join("");
-      setInput(interim || final || input);
-      if (final) { setInput(final); r.stop(); }
+      got = Array.from(e.results).map(x => x[0].transcript).join(" ").trim();
+      setInput(got);
     };
-    r.onend = () => { listeningRef.current = false; setVoiceState("idle"); setTimeout(startWake, 600); };
-    r.onerror = (e) => {
+    r.onend = () => {
       listeningRef.current = false; setVoiceState("idle");
-      if (e.error === "no-speech") setTimeout(startDictation, 300);
-      else setTimeout(startWake, 600);
+      if (got) { setTimeout(() => textareaRef.current?.focus(), 100); }
+      setTimeout(startWake, 500);
     };
-    try { r.start(); } catch {}
+    r.onerror = () => { listeningRef.current = false; setVoiceState("idle"); setTimeout(startWake, 500); };
+    try { r.start(); } catch { listeningRef.current = false; setVoiceState("idle"); }
   };
 
   const handleFile = async (file) => {
@@ -393,15 +395,6 @@ Special commands (emit on own line when relevant):
         </div>
       )}
 
-      {/* ── TOP BAR ── */}
-      <div style={{ padding: "4px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <div style={{ width: 6, height: 6, borderRadius: "50%", background: wakeOn ? C.green : "rgba(255,255,255,0.1)", boxShadow: wakeOn ? `0 0 8px ${C.green}` : "none", transition: "all 0.3s" }} />
-        <span style={{ fontSize: 9, color: wakeOn ? C.green : "rgba(255,255,255,0.18)", letterSpacing: 2, flex: 1 }}>
-          {wakeOn ? `SAY "HEY ${auraName.toUpperCase()}" TO TALK` : "WAKE WORD STANDBY"}
-        </span>
-        {thinkMode && <span style={{ fontSize: 9, color: C.gold, background: `${C.gold}15`, border: `1px solid ${C.gold}33`, borderRadius: 6, padding: "1px 7px" }}>🧠 THINK</span>}
-      </div>
-
       {/* ── MESSAGES ── */}
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
         {!hasMessages ? (
@@ -504,8 +497,9 @@ Special commands (emit on own line when relevant):
         )}
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <div style={{ display: "flex", gap: 7, alignItems: "flex-end", background: "rgba(255,255,255,0.05)", border: `1.5px solid ${voiceState === "dictating" ? C.green + "77" : input.trim() || attachment ? C.cyan + "55" : C.cyan + "18"}`, borderRadius: 20, padding: "8px 10px", transition: "border-color 0.2s" }}>
-            <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+            <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, position: "relative" }}>
               {showPlus ? "×" : "+"}
+              {thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.gold }} />}
             </button>
             <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
@@ -521,13 +515,12 @@ Special commands (emit on own line when relevant):
               ▶
             </button>
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 6 }}>
-            <button onClick={activateVoiceMode} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 10, fontFamily: "'DM Mono',monospace" }}>
-              🎙 Hold conversation
-            </button>
-            <span style={{ color: "rgba(255,255,255,0.08)", fontSize: 10 }}>·</span>
-            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.1)" }}>{auraName} · CEO Global</span>
-          </div>
+          {wakeOn && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 5 }}>
+              <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+              <span style={{ fontSize: 9, color: C.green, letterSpacing: 1 }}>SAY "HEY {auraName.toUpperCase()}"</span>
+            </div>
+          )}
         </div>
       </div>
 
