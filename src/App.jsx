@@ -40,7 +40,22 @@ export default function AuraOS() {
   const [showProfile, setShowProfile] = useState(false);
   const [agentMode, setAgentMode]     = useState(null);
   const [chatMode, setChatMode]       = useState(() => sto.get("aura_chat_mode", "chat"));
+  const [darkMode, setDarkMode]       = useState(() => sto.get("aura_dark_mode", true));
   const touchStartX = useRef(0);
+
+  const theme = darkMode ? {
+    bg: "#02020a", sidebar: "#04040e", topbar: "#02020af2",
+    text: "#fff", textDim: "rgba(255,255,255,0.45)", textFaint: "rgba(255,255,255,0.18)",
+    border: "rgba(255,255,255,0.07)", hover: "rgba(255,255,255,0.05)",
+    inputBg: "rgba(255,255,255,0.04)",
+  } : {
+    bg: "#f0f2f8", sidebar: "#ffffff", topbar: "#f0f2f8",
+    text: "#0f0f1a", textDim: "rgba(0,0,0,0.55)", textFaint: "rgba(0,0,0,0.3)",
+    border: "rgba(0,0,0,0.09)", hover: "rgba(0,0,0,0.04)",
+    inputBg: "rgba(0,0,0,0.04)",
+  };
+
+  const toggleDark = () => { const v = !darkMode; setDarkMode(v); sto.set("aura_dark_mode", v); };
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -150,133 +165,124 @@ export default function AuraOS() {
   if (minimized) return (
     <>
       <style>{CSS}</style>
-      <div
-        onClick={() => setMinimized(false)}
-        style={{ position: "fixed", bottom: 28, right: 20, width: 62, height: 62, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 9999, fontSize: 28, boxShadow: `0 6px 28px ${C.cyan}66`, animation: "pulse 3s ease-in-out infinite" }}
-      >◈</div>
+      <div onClick={() => setMinimized(false)} style={{ position: "fixed", bottom: 28, right: 20, width: 62, height: 62, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 9999, fontSize: 28, boxShadow: `0 6px 28px ${C.cyan}66`, animation: "pulse 3s ease-in-out infinite" }}>◈</div>
     </>
   );
 
+  const SB = (label, active) => ({
+    width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "9px 12px",
+    borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "'DM Mono',monospace",
+    background: active ? theme.hover : "transparent", transition: "background 0.12s", textAlign: "left",
+  });
+
   return (
-    <div style={{ height: "100dvh", minHeight: "-webkit-fill-available", background: C.bg, fontFamily: "'DM Mono',monospace", color: "#fff", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100dvh", minHeight: "-webkit-fill-available", background: theme.bg, fontFamily: "'DM Mono',monospace", color: theme.text, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
       <style>{CSS}</style>
 
-      {/* Background grid */}
-      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: `linear-gradient(${C.cyan}03 1px,transparent 1px),linear-gradient(90deg,${C.cyan}03 1px,transparent 1px)`, backgroundSize: "44px 44px", zIndex: 0 }} />
+      {darkMode && <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: `linear-gradient(${C.cyan}03 1px,transparent 1px),linear-gradient(90deg,${C.cyan}03 1px,transparent 1px)`, backgroundSize: "44px 44px", zIndex: 0 }} />}
 
-      {/* Sidebar backdrop */}
-      {sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.62)", zIndex: 40, backdropFilter: "blur(3px)" }} />
-      )}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 40, backdropFilter: "blur(4px)" }} />}
 
       {/* ── SIDEBAR ── */}
-      <div style={{
-        position: "fixed", top: 0, bottom: 0,
-        left: sidebarOpen ? 0 : -272,
-        width: 272, zIndex: 50,
-        background: "#04040e",
-        borderRight: `1px solid ${C.border}`,
-        display: "flex", flexDirection: "column",
-        transition: "left 0.26s cubic-bezier(.4,0,.2,1)",
-      }}>
+      <div style={{ position: "fixed", top: 0, bottom: 0, left: sidebarOpen ? 0 : -280, width: 280, zIndex: 50, background: theme.sidebar, borderRight: `1px solid ${theme.border}`, display: "flex", flexDirection: "column", transition: "left 0.25s cubic-bezier(.4,0,.2,1)", boxShadow: sidebarOpen ? "4px 0 32px rgba(0,0,0,0.35)" : "none" }}>
 
-        {/* Sidebar header */}
-        <div style={{ padding: "18px 14px 14px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{ position: "relative", width: 30, height: 30 }}>
-              <div style={{ position: "absolute", inset: 0, border: `1.5px solid ${C.cyan}66`, borderRadius: "50%", animation: "rotate 8s linear infinite" }} />
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: C.cyan }}>◈</div>
+        {/* Header */}
+        <div style={{ padding: "16px 14px 12px", borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+            <div style={{ position: "relative", width: 28, height: 28, flexShrink: 0 }}>
+              <div style={{ position: "absolute", inset: 0, border: `1.5px solid ${C.cyan}55`, borderRadius: "50%", animation: "rotate 8s linear infinite" }} />
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: C.cyan }}>◈</div>
             </div>
-            <div>
-              <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 13, fontWeight: 900, color: C.cyan, letterSpacing: 2 }}>{auraName}</div>
-              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.18)", marginTop: 1 }}>AI OS · LIVE</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 12, fontWeight: 900, color: C.cyan, letterSpacing: 2, lineHeight: 1 }}>{auraName}</div>
+              <div style={{ fontSize: 9, color: theme.textFaint, marginTop: 2 }}>AI OS · LIVE</div>
             </div>
             {session?.name && (
-              <div onClick={() => setShowProfile(true)} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7, cursor: "pointer", padding: "4px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, transition: "background 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
-                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+              <div onClick={() => setShowProfile(true)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", padding: "4px 8px", borderRadius: 20, background: theme.hover, transition: "background 0.12s", flexShrink: 0 }}
+                onMouseEnter={e => e.currentTarget.style.background = theme.inputBg}
+                onMouseLeave={e => e.currentTarget.style.background = theme.hover}
               >
-                <div style={{ width: 22, height: 22, borderRadius: "50%", background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: "#000", flexShrink: 0 }}>
-                  {session.name[0].toUpperCase()}
-                </div>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", maxWidth: 60, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.name.split(" ")[0]}</span>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#000", flexShrink: 0 }}>{session.name[0].toUpperCase()}</div>
+                <span style={{ fontSize: 11, color: theme.textDim, maxWidth: 55, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.name.split(" ")[0]}</span>
               </div>
             )}
           </div>
-
-          {/* New Chat */}
-          <button onClick={newChat} style={{ width: "100%", background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", fontSize: 12, color: C.cyan, fontFamily: "'DM Mono',monospace", fontWeight: 700, display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = `${C.cyan}1a`}
-            onMouseLeave={e => e.currentTarget.style.background = `${C.cyan}10`}
+          <button onClick={newChat} style={{ width: "100%", background: `${C.cyan}12`, border: `1px solid ${C.cyan}28`, borderRadius: 8, padding: "9px 14px", cursor: "pointer", fontSize: 12, color: C.cyan, fontFamily: "'DM Mono',monospace", fontWeight: 700, display: "flex", alignItems: "center", gap: 8, transition: "background 0.12s" }}
+            onMouseEnter={e => e.currentTarget.style.background = `${C.cyan}20`}
+            onMouseLeave={e => e.currentTarget.style.background = `${C.cyan}12`}
           >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> New Chat
+            <span style={{ fontSize: 16, lineHeight: 1 }}>✎</span> New Chat
           </button>
         </div>
 
-        {/* AURA Modes */}
-        <div style={{ padding: "10px 8px 6px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", letterSpacing: 2, padding: "0 8px 8px", textTransform: "uppercase" }}>Modes</div>
+        {/* Modes */}
+        <div style={{ padding: "10px 10px 6px", borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: theme.textFaint, letterSpacing: 2, padding: "0 4px 6px", textTransform: "uppercase", fontWeight: 700 }}>Modes</div>
           {MODES.map(mode => {
             const active = chatMode === mode.id && !agentMode && view === "chat";
             return (
               <button key={mode.id} onClick={() => switchMode(mode)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 10, cursor: "pointer", background: active ? `${mode.color}18` : "transparent", border: `1px solid ${active ? mode.color + "33" : "transparent"}`, marginBottom: 2, fontFamily: "'DM Mono',monospace", transition: "all 0.15s", textAlign: "left" }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background = active ? `${mode.color}18` : "transparent"; }}
+                style={{ ...SB(mode.name, active), background: active ? `${mode.color}14` : "transparent", borderLeft: active ? `3px solid ${mode.color}` : "3px solid transparent", borderRadius: 0, borderTopRightRadius: 7, borderBottomRightRadius: 7, paddingLeft: 10, marginBottom: 1 }}
+                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = theme.hover; e.currentTarget.style.borderLeftColor = `${mode.color}44`; } }}
+                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent"; } }}
               >
-                <span style={{ fontSize: 17, flexShrink: 0 }}>{mode.icon}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: active ? mode.color : "rgba(255,255,255,0.8)", fontWeight: active ? 700 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mode.name}</div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>{mode.label}</div>
+                <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: "center" }}>{mode.icon}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 12, color: active ? mode.color : theme.text, fontWeight: active ? 700 : 400, lineHeight: 1.2 }}>{mode.name}</div>
+                  <div style={{ fontSize: 10, color: theme.textFaint, marginTop: 1 }}>{mode.label}</div>
                 </div>
+                {active && <div style={{ width: 5, height: 5, borderRadius: "50%", background: mode.color, flexShrink: 0 }} />}
               </button>
             );
           })}
         </div>
 
-        {/* Sessions list */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px" }}>
-          {sessions.length > 0 && (
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", letterSpacing: 2, padding: "0 8px 8px", textTransform: "uppercase" }}>Recent</div>
-          )}
+        {/* Sessions */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
+          {sessions.length > 0 && <div style={{ fontSize: 9, color: theme.textFaint, letterSpacing: 2, padding: "4px 4px 6px", textTransform: "uppercase", fontWeight: 700 }}>Recent</div>}
           {sessions.map(s => {
             const isActive = s.id === activeSid && view === "chat";
             return (
               <div key={s.id} onClick={() => selectSession(s.id)}
-                style={{ padding: "9px 10px", borderRadius: 10, cursor: "pointer", marginBottom: 2, position: "relative", display: "flex", alignItems: "center", gap: 6, background: isActive ? `${C.cyan}0e` : "transparent", border: `1px solid ${isActive ? C.cyan + "25" : "transparent"}`, transition: "all 0.15s", group: true }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.querySelector(".del-btn").style.opacity = "1"; }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; e.currentTarget.querySelector(".del-btn").style.opacity = "0"; }}
+                style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 1, display: "flex", alignItems: "center", gap: 8, background: isActive ? `${C.cyan}0c` : "transparent", borderLeft: isActive ? `3px solid ${C.cyan}88` : "3px solid transparent", borderTopRightRadius: 7, borderBottomRightRadius: 7, transition: "all 0.12s" }}
+                onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = theme.hover; e.currentTarget.querySelector(".del-btn").style.opacity = "1"; } }}
+                onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.querySelector(".del-btn").style.opacity = "0"; } }}
               >
-                <span style={{ fontSize: 12, flexShrink: 0, opacity: 0.4 }}>💬</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: isActive ? C.cyan : "rgba(255,255,255,0.72)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
-                  {s.preview && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.22)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{s.preview}</div>}
+                  <div style={{ fontSize: 12, color: isActive ? C.cyan : theme.text, fontWeight: isActive ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
+                  {s.preview && <div style={{ fontSize: 10, color: theme.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{s.preview.replace(/\*\*/g, "")}</div>}
                 </div>
-                <button className="del-btn" onClick={e => deleteSession(e, s.id)}
-                  style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", cursor: "pointer", fontSize: 13, padding: "0 2px", flexShrink: 0, opacity: 0, transition: "opacity 0.15s" }}
-                >✕</button>
+                <button className="del-btn" onClick={e => deleteSession(e, s.id)} style={{ background: "none", border: "none", color: theme.textFaint, cursor: "pointer", fontSize: 12, padding: "0 2px", flexShrink: 0, opacity: 0, transition: "opacity 0.12s" }}>✕</button>
               </div>
             );
           })}
         </div>
 
-        {/* Sidebar footer */}
-        <div style={{ padding: "10px 8px 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+        {/* Footer nav */}
+        <div style={{ padding: "8px 10px 16px", borderTop: `1px solid ${theme.border}`, flexShrink: 0 }}>
           {[
-            { id: "agents",   icon: "🤖", label: "Agents",   color: C.cyan },
-            { id: "settings", icon: "⚙", label: "Settings", color: "rgba(255,255,255,0.7)" },
-            { id: "admin",    icon: "🔐", label: "Admin",    color: C.red },
+            { id: "agents",   icon: "🤖", label: "AI Agents",  color: C.cyan },
+            { id: "settings", icon: "⚙️",  label: "Settings",   color: theme.textDim },
+            { id: "admin",    icon: "🔐", label: "Admin",      color: C.red + "cc" },
           ].map(item => (
-            <button key={item.id}
-              onClick={() => { setView(item.id); setSidebarOpen(false); }}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 10px", borderRadius: 10, cursor: "pointer", background: view === item.id ? "rgba(255,255,255,0.08)" : "transparent", marginBottom: 2, border: "none", fontFamily: "'DM Mono',monospace", transition: "background 0.15s" }}
-              onMouseEnter={e => { if (view !== item.id) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+            <button key={item.id} onClick={() => { setView(item.id); setSidebarOpen(false); }}
+              style={{ ...SB(item.label, view === item.id), marginBottom: 1, background: view === item.id ? theme.hover : "transparent" }}
+              onMouseEnter={e => { if (view !== item.id) e.currentTarget.style.background = theme.hover; }}
               onMouseLeave={e => { if (view !== item.id) e.currentTarget.style.background = "transparent"; }}
             >
-              <span style={{ fontSize: 15 }}>{item.icon}</span>
-              <span style={{ fontSize: 13, color: item.color, fontWeight: 600 }}>{item.label}</span>
+              <span style={{ fontSize: 14, width: 20, textAlign: "center" }}>{item.icon}</span>
+              <span style={{ fontSize: 12, color: item.color, fontWeight: view === item.id ? 700 : 400 }}>{item.label}</span>
             </button>
           ))}
+          {/* Theme toggle */}
+          <button onClick={toggleDark}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", marginTop: 4, borderRadius: 8, cursor: "pointer", border: `1px solid ${theme.border}`, background: theme.hover, fontFamily: "'DM Mono',monospace", transition: "background 0.12s" }}
+            onMouseEnter={e => e.currentTarget.style.background = theme.inputBg}
+            onMouseLeave={e => e.currentTarget.style.background = theme.hover}
+          >
+            <span style={{ fontSize: 14, width: 20, textAlign: "center" }}>{darkMode ? "☀️" : "🌙"}</span>
+            <span style={{ fontSize: 12, color: theme.textDim }}>{darkMode ? "Light Mode" : "Dark Mode"}</span>
+          </button>
         </div>
       </div>
 
@@ -284,36 +290,18 @@ export default function AuraOS() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, position: "relative", zIndex: 1 }}>
 
         {/* Top bar */}
-        <div style={{ padding: "9px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 9, flexShrink: 0, background: `${C.bg}f2`, backdropFilter: "blur(20px)", zIndex: 10, position: "relative" }}>
-
-          {/* ≡ menu OR ← back button */}
+        <div style={{ padding: "8px 12px", borderBottom: `1px solid ${theme.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, background: theme.topbar, backdropFilter: "blur(20px)", zIndex: 10 }}>
           {(() => {
             const isBack = view !== "chat" || !!agentMode;
             return (
-              <button
-                onClick={() => {
-                  if (view !== "chat") { goBack(); }
-                  else if (agentMode) { setView("agents"); }
-                  else { setSidebarOpen(s => !s); }
-                }}
-                style={{ background: isBack ? `${C.cyan}10` : `${C.cyan}18`, border: `1px solid ${C.cyan}44`, borderRadius: 9, padding: "7px 12px", cursor: "pointer", color: C.cyan, fontSize: isBack ? 20 : 22, lineHeight: 1, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", minWidth: 44, flexShrink: 0 }}
-              >
-                {isBack ? "←" : "≡"}
-              </button>
+              <button onClick={() => { if (view !== "chat") goBack(); else if (agentMode) setView("agents"); else setSidebarOpen(s => !s); }}
+                style={{ background: `${C.cyan}14`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "6px 11px", cursor: "pointer", color: C.cyan, fontSize: isBack ? 19 : 20, lineHeight: 1, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.12s", minWidth: 40, flexShrink: 0 }}
+              >{isBack ? "←" : "≡"}</button>
             );
           })()}
-
-          <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {activeTitle}
-          </div>
-
-          <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
-            {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </div>
-
-          <button onClick={() => setMinimized(true)} title="Minimize"
-            style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 9, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "rgba(255,255,255,0.25)", lineHeight: 1 }}
-          >—</button>
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeTitle}</div>
+          <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: theme.textFaint }}>{time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+          <button onClick={() => setMinimized(true)} style={{ background: theme.hover, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: theme.textFaint, lineHeight: 1 }}>—</button>
         </div>
 
         {/* Screen content */}

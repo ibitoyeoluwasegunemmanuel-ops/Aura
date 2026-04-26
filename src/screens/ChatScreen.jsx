@@ -370,7 +370,7 @@ Special commands (emit on own line when relevant):
         onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Chat", clean.slice(0, 60));
         return updated;
       });
-      speakFull(clean);
+      // Auto-speak only in voice conversation mode — tap 🔊 to speak manually
     } catch (e) {
       setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `⚠️ ${e.message}`, streaming: false } : x));
     }
