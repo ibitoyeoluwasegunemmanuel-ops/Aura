@@ -41,6 +41,8 @@ export default function AuraOS() {
   const [agentMode, setAgentMode]     = useState(null);
   const [chatMode, setChatMode]       = useState(() => sto.get("aura_chat_mode", "chat"));
   const [darkMode, setDarkMode]       = useState(() => sto.get("aura_dark_mode", true));
+  const [renamingId, setRenamingId]   = useState(null);
+  const [renameVal, setRenameVal]     = useState("");
   const touchStartX = useRef(0);
 
   const theme = darkMode ? {
@@ -242,17 +244,49 @@ export default function AuraOS() {
           {sessions.length > 0 && <div style={{ fontSize: 9, color: theme.textFaint, letterSpacing: 2, padding: "4px 4px 6px", textTransform: "uppercase", fontWeight: 700 }}>Recent</div>}
           {sessions.map(s => {
             const isActive = s.id === activeSid && view === "chat";
+            const isRenaming = renamingId === s.id;
+            const startRename = (e) => {
+              e.stopPropagation();
+              setRenamingId(s.id);
+              setRenameVal(s.title);
+            };
+            const commitRename = () => {
+              const v = renameVal.trim();
+              if (v) {
+                setSessions(prev => {
+                  const u = prev.map(x => x.id === s.id ? { ...x, title: v } : x);
+                  sto.set("aura_sessions", u);
+                  return u;
+                });
+              }
+              setRenamingId(null);
+            };
             return (
-              <div key={s.id} onClick={() => selectSession(s.id)}
-                style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 1, display: "flex", alignItems: "center", gap: 8, background: isActive ? `${C.cyan}0c` : "transparent", borderLeft: isActive ? `3px solid ${C.cyan}88` : "3px solid transparent", borderTopRightRadius: 7, borderBottomRightRadius: 7, transition: "all 0.12s" }}
-                onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = theme.hover; e.currentTarget.querySelector(".del-btn").style.opacity = "1"; } }}
-                onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.querySelector(".del-btn").style.opacity = "0"; } }}
+              <div key={s.id} onClick={() => { if (!isRenaming) selectSession(s.id); }}
+                style={{ padding: "7px 8px", borderRadius: 8, cursor: "pointer", marginBottom: 1, display: "flex", alignItems: "center", gap: 6, background: isActive ? `${C.cyan}0c` : "transparent", borderLeft: isActive ? `3px solid ${C.cyan}88` : "3px solid transparent", borderTopRightRadius: 7, borderBottomRightRadius: 7, transition: "all 0.12s", position: "relative" }}
+                onMouseEnter={e => { if (!isActive && !isRenaming) { e.currentTarget.style.background = theme.hover; e.currentTarget.querySelector(".sess-actions").style.opacity = "1"; } }}
+                onMouseLeave={e => { if (!isActive && !isRenaming) { e.currentTarget.style.background = "transparent"; const a = e.currentTarget.querySelector(".sess-actions"); if (a) a.style.opacity = "0"; } }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: isActive ? C.cyan : theme.text, fontWeight: isActive ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
-                  {s.preview && <div style={{ fontSize: 10, color: theme.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{s.preview.replace(/\*\*/g, "")}</div>}
+                {isRenaming ? (
+                  <input
+                    autoFocus
+                    value={renameVal}
+                    onChange={e => setRenameVal(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                    onClick={e => e.stopPropagation()}
+                    style={{ flex: 1, background: theme.inputBg, border: `1px solid ${C.cyan}44`, borderRadius: 6, padding: "4px 8px", color: theme.text, fontSize: 12, fontFamily: "'DM Mono',monospace", outline: "none" }}
+                  />
+                ) : (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: isActive ? C.cyan : theme.text, fontWeight: isActive ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
+                    {s.preview && <div style={{ fontSize: 10, color: theme.textFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{s.preview.replace(/\*\*/g, "")}</div>}
+                  </div>
+                )}
+                <div className="sess-actions" style={{ display: "flex", gap: 2, flexShrink: 0, opacity: isActive ? 1 : 0, transition: "opacity 0.12s" }}>
+                  <button onClick={startRename} title="Rename" style={{ background: "none", border: "none", color: theme.textFaint, cursor: "pointer", fontSize: 11, padding: "2px 3px", lineHeight: 1 }}>✎</button>
+                  <button onClick={e => deleteSession(e, s.id)} title="Delete" style={{ background: "none", border: "none", color: theme.textFaint, cursor: "pointer", fontSize: 11, padding: "2px 3px", lineHeight: 1 }}>✕</button>
                 </div>
-                <button className="del-btn" onClick={e => deleteSession(e, s.id)} style={{ background: "none", border: "none", color: theme.textFaint, cursor: "pointer", fontSize: 12, padding: "0 2px", flexShrink: 0, opacity: 0, transition: "opacity 0.12s" }}>✕</button>
               </div>
             );
           })}
