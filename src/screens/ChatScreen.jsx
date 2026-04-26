@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { C } from "../theme/colors";
-import { callClaudeStream, genImg } from "../utils/api";
+import { callClaudeStream, genImgEnhanced } from "../utils/api";
 import { speakFull } from "../utils/voice";
 import { sto } from "../utils/storage";
 import { FOUNDER_SYSTEM_BLOCK } from "../data/founder";
@@ -344,10 +344,12 @@ Special commands (emit on own line when relevant):
       const extra = [];
       if (full.includes("[IMAGE:")) {
         const desc = full.match(/\[IMAGE:\s*(.+?)\]/)?.[1] || t;
-        extra.push({ role: "assistant", type: "image", imageUrl: genImg(desc), caption: desc });
+        const imageUrl = await genImgEnhanced(desc);
+        extra.push({ role: "assistant", type: "image", imageUrl, caption: desc });
       } else if (full.includes("[PREVIEW:")) {
         const desc = full.match(/\[PREVIEW:\s*(.+?)\]/)?.[1] || t;
-        extra.push({ role: "assistant", type: "preview", imageUrl: genImg(`website UI: ${desc}`), caption: desc });
+        const imageUrl = await genImgEnhanced(`app/website UI design mockup: ${desc}`);
+        extra.push({ role: "assistant", type: "preview", imageUrl, caption: desc });
       } else if (full.includes("[LOCATION]")) {
         navigator.geolocation?.getCurrentPosition(
           p => setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `📍 ${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`, streaming: false } : x)),

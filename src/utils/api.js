@@ -46,4 +46,19 @@ export async function callClaudeStream(messages, system = "", onChunk) {
 }
 
 export const genImg = (prompt, seed = Date.now()) =>
-  `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&nologo=true&seed=${seed}`;
+  `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1024&height=1024&nologo=true&enhance=true&seed=${seed}`;
+
+// Claude writes a professional image prompt first, then generates at high quality
+export async function genImgEnhanced(userDesc) {
+  try {
+    const enhanced = await callClaude(
+      [{ role: "user", content: `Write a detailed AI image generation prompt for: "${userDesc}". Reply with ONLY the prompt — no explanation. Include visual style, lighting, mood, composition, and quality keywords like "photorealistic, 8K, cinematic lighting" or matching artistic style.` }],
+      "You are a professional AI image prompt engineer. Write vivid, specific prompts that produce stunning images.",
+      180
+    );
+    const prompt = enhanced.trim() || userDesc;
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1024&height=1024&nologo=true&enhance=false&seed=${Date.now()}`;
+  } catch {
+    return genImg(userDesc);
+  }
+}
