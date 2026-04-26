@@ -8,6 +8,7 @@ import AuthScreen      from "./screens/AuthScreen";
 import AdminDashboard  from "./screens/AdminDashboard";
 import ChatScreen      from "./screens/ChatScreen";
 import SettingsScreen  from "./screens/SettingsScreen";
+import AgentsScreen    from "./screens/AgentsScreen";
 
 function makeSid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
@@ -30,6 +31,7 @@ export default function AuraOS() {
   const [view, setView]             = useState("chat");
   const [time, setTime]             = useState(new Date());
   const [showProfile, setShowProfile] = useState(false);
+  const [agentMode, setAgentMode]     = useState(null);
   const touchStartX = useRef(0);
 
   useEffect(() => {
@@ -71,12 +73,24 @@ export default function AuraOS() {
     const s = { id, title: "New Chat", preview: "", updatedAt: Date.now() };
     setSessions(prev => { const u = [s, ...prev]; sto.set("aura_sessions", u); return u; });
     setActiveSid(id);
+    setAgentMode(null);
+    setView("chat");
+    setSidebarOpen(false);
+  };
+
+  const launchAgent = (agent) => {
+    const id = makeSid();
+    const s = { id, title: agent.name, preview: agent.description, updatedAt: Date.now() };
+    setSessions(prev => { const u = [s, ...prev]; sto.set("aura_sessions", u); return u; });
+    setActiveSid(id);
+    setAgentMode(agent);
     setView("chat");
     setSidebarOpen(false);
   };
 
   const selectSession = (id) => {
     setActiveSid(id);
+    setAgentMode(null);
     setView("chat");
     setSidebarOpen(false);
   };
@@ -104,7 +118,7 @@ export default function AuraOS() {
     });
   };
 
-  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : (sessions.find(s => s.id === activeSid)?.title || auraName);
+  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : view === "agents" ? "AI Agents" : (sessions.find(s => s.id === activeSid)?.title || auraName);
 
   if (!session) return (
     <>
@@ -208,6 +222,7 @@ export default function AuraOS() {
         {/* Sidebar footer */}
         <div style={{ padding: "10px 8px 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
           {[
+            { id: "agents",   icon: "🤖", label: "Agents",   color: C.cyan },
             { id: "settings", icon: "⚙", label: "Settings", color: "rgba(255,255,255,0.7)" },
             { id: "admin",    icon: "🔐", label: "Admin",    color: C.red },
           ].map(item => (
@@ -230,17 +245,15 @@ export default function AuraOS() {
         {/* Top bar */}
         <div style={{ padding: "9px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 9, flexShrink: 0, background: `${C.bg}f2`, backdropFilter: "blur(20px)", zIndex: 10, position: "relative" }}>
 
-          {view !== "chat" ? (
-            /* Back button when in Settings / Admin */
-            <button onClick={goBack}
-              style={{ background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 9, padding: "6px 13px", cursor: "pointer", color: C.cyan, fontSize: 16, lineHeight: 1, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}
-            >← <span style={{ fontSize: 11 }}>Back</span></button>
-          ) : (
-            /* Hamburger — always visible in chat */
-            <button onClick={() => setSidebarOpen(s => !s)}
-              style={{ background: sidebarOpen ? `${C.cyan}18` : `${C.cyan}08`, border: `1px solid ${sidebarOpen ? C.cyan + "55" : C.cyan + "22"}`, borderRadius: 9, padding: "7px 11px", cursor: "pointer", color: sidebarOpen ? C.cyan : C.cyan + "bb", fontSize: 18, lineHeight: 1, transition: "all 0.15s" }}
-            >≡</button>
-          )}
+          {/* ← always visible back / menu button */}
+          <button
+            onClick={() => {
+              if (view !== "chat") { goBack(); }
+              else if (agentMode) { setView("agents"); }
+              else { setSidebarOpen(s => !s); }
+            }}
+            style={{ background: `${C.cyan}10`, border: `1px solid ${C.cyan}33`, borderRadius: 9, padding: "7px 13px", cursor: "pointer", color: C.cyan, fontSize: 20, lineHeight: 1, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", minWidth: 44 }}
+          >←</button>
 
           <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {activeTitle}
@@ -264,6 +277,7 @@ export default function AuraOS() {
               authSession={session}
               chatSessionId={activeSid}
               onSessionUpdate={updateSession}
+              agentMode={agentMode}
             />
           )}
           {view === "settings" && (
@@ -278,6 +292,9 @@ export default function AuraOS() {
             <div style={{ height: "100%", overflow: "hidden" }}>
               <AdminDashboard />
             </div>
+          )}
+          {view === "agents" && (
+            <AgentsScreen onLaunch={launchAgent} />
           )}
         </div>
       </div>
