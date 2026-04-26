@@ -411,7 +411,7 @@ Special commands (emit on own line when relevant):
       {/* ── MESSAGES ── */}
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
         {!hasMessages ? (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 20px 12px", gap: 20, maxWidth: 680, margin: "0 auto", width: "100%" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "20px 16px 32px", gap: 16, maxWidth: 560, margin: "0 auto", width: "100%" }}>
             <div style={{ position: "relative", width: 80, height: 80, cursor: "pointer" }} onClick={activateVoiceMode}>
               <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1.5px solid ${C.cyan}44`, animation: "rotate 8s linear infinite" }} />
               <div style={{ position: "absolute", inset: 5, borderRadius: "50%", border: `1px solid ${C.purple}33`, animation: "rotate 12s linear infinite reverse" }} />
@@ -439,6 +439,43 @@ Special commands (emit on own line when relevant):
               {QUICK.map((q, i) => (
                 <div key={i} onClick={() => send(q)} style={{ padding: "6px 14px", background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: 11, color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>{q}</div>
               ))}
+            </div>
+
+            {/* ── CENTERED INPUT (empty state) ── */}
+            <div style={{ width: "100%", marginTop: 4 }}>
+              {attachment && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  {attachment.preview
+                    ? <img src={attachment.preview} alt="attach" style={{ height: 48, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                    : <div style={{ fontSize: 11, color: C.cyan, background: `${C.cyan}15`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "4px 10px" }}>📎 {attachment.file.name}</div>}
+                  <button onClick={() => setAttachment(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 16 }}>✕</button>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 7, alignItems: "flex-end", background: "rgba(255,255,255,0.06)", border: `1.5px solid ${voiceState === "dictating" ? C.green + "77" : input.trim() || attachment ? C.cyan + "66" : C.cyan + "28"}`, borderRadius: 20, padding: "10px 12px", transition: "border-color 0.2s", boxShadow: `0 4px 24px ${C.cyan}12` }}>
+                <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, position: "relative" }}>
+                  {showPlus ? "×" : "+"}
+                  {thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.gold }} />}
+                </button>
+                <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                  placeholder={voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
+                  rows={1}
+                  style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 14, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
+                <button onClick={voiceMode ? deactivateVoiceMode : startDictation}
+                  style={{ background: voiceMode ? `${C.green}22` : voiceState === "dictating" ? `${C.red}22` : "rgba(255,255,255,0.06)", border: `1px solid ${voiceMode ? C.green + "55" : voiceState === "dictating" ? C.red + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: voiceMode || voiceState === "dictating" ? "pulse 1.2s infinite" : "none" }}>
+                  {voiceMode ? "🟢" : voiceState === "dictating" ? "🔴" : "🎙"}
+                </button>
+                <button onClick={() => voiceMode ? activateVoiceMode() : send()} disabled={(!input.trim() && !attachment) || loading}
+                  style={{ background: (input.trim() || attachment) && !loading ? `linear-gradient(135deg,${C.cyan},${C.purple})` : "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 38, height: 38, cursor: (input.trim() || attachment) && !loading ? "pointer" : "default", fontSize: 15, color: (input.trim() || attachment) && !loading ? "#000" : "rgba(255,255,255,0.2)", fontWeight: 800, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
+                  ▶
+                </button>
+              </div>
+              {wakeOn && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 7 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                  <span style={{ fontSize: 9, color: C.green, letterSpacing: 1 }}>SAY "HEY {auraName.toUpperCase()}"</span>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -509,8 +546,8 @@ Special commands (emit on own line when relevant):
         </>
       )}
 
-      {/* ── INPUT BAR ── */}
-      <div style={{ padding: "8px 12px 18px", borderTop: `1px solid ${C.border}`, flexShrink: 0, background: `${C.bg}f4`, backdropFilter: "blur(20px)" }}>
+      {/* ── INPUT BAR (messages mode only — empty state has its own centered input) ── */}
+      {hasMessages && <div style={{ padding: "8px 12px 18px", borderTop: `1px solid ${C.border}`, flexShrink: 0, background: `${C.bg}f4`, backdropFilter: "blur(20px)" }}>
         {attachment && (
           <div style={{ maxWidth: 760, margin: "0 auto 8px", display: "flex", alignItems: "center", gap: 8 }}>
             {attachment.preview
@@ -546,7 +583,7 @@ Special commands (emit on own line when relevant):
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
     </div>
   );
