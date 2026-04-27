@@ -75,6 +75,14 @@ function Markdown({ text }) {
       const codeStr = code.join("\n");
       if (lang === "html") {
         els.push(<HtmlPreview key={i} code={codeStr} />);
+      } else if (lang === "mermaid") {
+        const mermaidHtml = `<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"><\/script><style>body{background:#0d0d0d;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;box-sizing:border-box}.mermaid{max-width:100%}</style></head><body><div class="mermaid">${codeStr}</div><script>mermaid.initialize({startOnLoad:true,theme:'dark'})<\/script></body></html>`;
+        els.push(
+          <div key={i} style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${C.cyan}33`, margin: "8px 0" }}>
+            <div style={{ padding: "6px 12px", fontSize: 10, color: C.cyan, background: `${C.cyan}08`, fontWeight: 700 }}>📊 Diagram</div>
+            <iframe srcDoc={mermaidHtml} sandbox="allow-scripts allow-same-origin" style={{ width: "100%", height: 300, border: "none", background: "#0d0d0d", display: "block" }} title="diagram" />
+          </div>
+        );
       } else {
         els.push(
           <pre key={i} style={{ background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px", overflowX: "auto", margin: "6px 0" }}>
