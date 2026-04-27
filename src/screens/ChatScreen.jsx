@@ -91,6 +91,11 @@ function Markdown({ text }) {
           </pre>
         );
       }
+    } else if (line.trim().startsWith("$$")) {
+      const mathLines = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("$$")) { mathLines.push(lines[i]); i++; }
+      els.push(<div key={i} style={{ margin: "8px 0" }}><MathBlock tex={mathLines.join("\n")} inline={false} /></div>);
     } else if (/^#{1,3} /.test(line)) {
       const lvl = line.match(/^(#{1,3}) /)[1].length;
       els.push(<div key={i} style={{ fontWeight: 700, fontSize: lvl === 1 ? 16 : lvl === 2 ? 14 : 13, color: "#fff", margin: "10px 0 4px" }}>{line.replace(/^#{1,3} /, "")}</div>);
@@ -134,15 +139,27 @@ function Markdown({ text }) {
   return <div style={{ lineHeight: 1.75 }}>{els}</div>;
 }
 
+function MathBlock({ tex, inline }) {
+  const html = `<!DOCTYPE html><html><head><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"><\/script><style>body{margin:0;padding:${inline ? "0 4px" : "12px 16px"};background:transparent;display:flex;align-items:center;justify-content:${inline ? "flex-start" : "center"}}.katex{color:#e2e8f0;font-size:${inline ? "13px" : "16px"}}</style></head><body><span id="m"></span><script>katex.render(${JSON.stringify(tex)},document.getElementById('m'),{throwOnError:false,displayMode:${!inline}})<\/script></body></html>`;
+  return (
+    <iframe srcDoc={html} sandbox="allow-scripts allow-same-origin"
+      style={{ border: "none", background: "transparent", display: inline ? "inline-block" : "block",
+        width: inline ? "auto" : "100%", height: inline ? 24 : 60, verticalAlign: "middle", maxWidth: "100%" }}
+      title="math" scrolling="no"
+    />
+  );
+}
+
 function renderInline(text) {
   const parts = [];
-  const re = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`([^`]+)`)/g;
+  const re = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`([^`]+)`)|\$(.+?)\$/g;
   let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
     if (m[1]) parts.push(<strong key={m.index} style={{ color: "#fff", fontWeight: 700 }}>{m[2]}</strong>);
     else if (m[3]) parts.push(<em key={m.index} style={{ color: "rgba(255,255,255,0.8)" }}>{m[4]}</em>);
     else if (m[5]) parts.push(<code key={m.index} style={{ background: "rgba(0,255,229,0.08)", border: "1px solid rgba(0,255,229,0.15)", borderRadius: 4, padding: "1px 5px", fontFamily: "'DM Mono',monospace", fontSize: 12, color: C.cyan }}>{m[6]}</code>);
+    else if (m[7]) parts.push(<MathBlock key={m.index} tex={m[7]} inline />);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
