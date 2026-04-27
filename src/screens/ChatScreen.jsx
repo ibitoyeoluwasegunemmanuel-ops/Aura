@@ -78,7 +78,9 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
     : "";
 
   const artifactContext = artifact
-    ? `\n\nCURRENT OPEN DESIGN (already rendered in the live preview panel):\n\`\`\`html\n${artifact.code}\n\`\`\`\nIf the user asks to change, update, edit, modify, improve, or fix this design → output a complete revised \`\`\`html code block with ALL changes applied. Keep everything else intact.`
+    ? artifact.type === "multifile"
+      ? `\n\nCURRENT OPEN MULTI-FILE PROJECT (rendered in preview panel):\n${artifact.files.map(f => `\`\`\`${f.lang}\n${f.code}\n\`\`\``).join("\n")}\nIf the user asks to modify → output the changed files as separate \`\`\`html / \`\`\`css / \`\`\`js code blocks again.`
+      : `\n\nCURRENT OPEN DESIGN (already rendered in the live preview panel):\n\`\`\`html\n${artifact.code}\n\`\`\`\nIf the user asks to change, update, edit, modify, improve, or fix this design → output a complete revised \`\`\`html code block with ALL changes applied. Keep everything else intact.`
     : "";
 
   const FOLLOWUPS_RULE = `
@@ -101,7 +103,10 @@ Special commands (emit on own line when relevant):
 [LOCATION] — get GPS
 [OPEN: url] — open website
 
-DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth animations (cubic-bezier transitions), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality.${artifactContext}${memoryBlock}${FOLLOWUPS_RULE}`
+DESIGN RULE: When asked to design or build any website, web app, dashboard, or UI:
+• Simple component → one self-contained \`\`\`html block with CSS and JS embedded
+• Complex app or game → separate \`\`\`html / \`\`\`css / \`\`\`js blocks (auto-combined into multi-file preview)
+Design standard: dark background (#0a0a0f), glassmorphism cards, CSS custom properties, smooth animations, Google Fonts CDN, gradient accents, real content, mobile responsive. Think: Stripe / Linear quality.${artifactContext}${memoryBlock}${FOLLOWUPS_RULE}`
     : `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
 ${modePrompt ? `\n${modePrompt}` : ""}
@@ -115,7 +120,10 @@ Special commands (emit on own line when relevant):
 [LOCATION] — get GPS
 [OPEN: url] — open website
 
-DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth transitions (cubic-bezier), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality. This renders live in AURA's preview panel.
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, or landing page — choose the right format:
+• Simple component or widget → one self-contained \`\`\`html block (CSS and JS embedded inside)
+• Complex app, game, or multi-page project → separate blocks: \`\`\`html for structure, \`\`\`css for styles, \`\`\`js for logic. AURA auto-combines them into a multi-file project.
+Design standard: dark background (#0a0a0f), glassmorphism cards, CSS custom properties, smooth transitions, Google Fonts CDN, gradient accents, real content, mobile responsive. Think: Stripe / Linear quality.
 
 REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code block. Define an \`App\` function component. Use inline styles or plain CSS. No imports needed — React is available globally.${artifactContext}${memoryBlock}${FOLLOWUPS_RULE}`;
 
@@ -436,9 +444,18 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
       mem.push({ ts: Date.now(), user: t.slice(0, 120), aura: clean.replace(/```[\s\S]*?```/g, "[code]").slice(0, 200) });
       sto.set("aura_memory", mem.slice(-20));
 
-      // Auto-open or update artifact panel whenever AURA outputs HTML
+      // Auto-open or update artifact panel whenever AURA outputs HTML (single or multi-file)
       const htmlMatch = clean.match(/```html\n([\s\S]*?)```/);
-      if (htmlMatch) {
+      const cssMatch  = clean.match(/```css\n([\s\S]*?)```/);
+      const jsMatch   = clean.match(/```(?:js|javascript)\n([\s\S]*?)```/);
+      if (htmlMatch && (cssMatch || jsMatch)) {
+        const files = [];
+        files.push({ name: "index.html", lang: "html",       code: htmlMatch[1] });
+        if (cssMatch) files.push({ name: "style.css",  lang: "css",        code: cssMatch[1] });
+        if (jsMatch)  files.push({ name: "script.js",  lang: "javascript", code: jsMatch[1] });
+        setArtifact({ type: "multifile", title: artifactRef.current?.title || "Project", files });
+        setArtifactTab("preview");
+      } else if (htmlMatch) {
         const existingTitle = artifactRef.current?.title || "Live Preview";
         setArtifact({ type: "html", code: htmlMatch[1], title: existingTitle });
         setArtifactTab("preview");
