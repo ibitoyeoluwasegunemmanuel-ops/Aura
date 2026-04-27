@@ -308,6 +308,8 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const [attachment, setAttachment]   = useState(null);
   const [thinkMode, setThinkMode]     = useState(false);
   const [searchMode, setSearchMode]   = useState(false);
+  const [editingIdx, setEditingIdx]   = useState(null);
+  const [editVal, setEditVal]         = useState("");
   const [artifact, setArtifact]       = useState(null); // { type: "html"|"mermaid", code, title }
   const [artifactTab, setArtifactTab] = useState("preview"); // "preview" | "code"
 
@@ -559,7 +561,7 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
     navigator.clipboard?.writeText(text).then(() => { setCopied(idx); setTimeout(() => setCopied(null), 2000); });
   };
 
-  const send = async (text) => {
+  const send = async (text, baseHistory) => {
     const t = (text || input).trim();
     if ((!t && !attachment) || loading) return;
     setInput("");
@@ -568,7 +570,7 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
       content: t || (attachment?.type === "pdf" ? `Analyze PDF: ${attachment.file.name}` : attachment?.type === "text" ? `Analyze file: ${attachment.file.name}` : "Describe this image."),
     };
     if (attachment?.preview) userMsg.imagePreview = attachment.preview;
-    const history = [...msgs, userMsg];
+    const history = [...(baseHistory || msgs), userMsg];
     setMsgs(history);
     const att = attachment;
     setAttachment(null);
@@ -775,10 +777,32 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
                   {(!m.type || m.type === "text") && (
                     <>
                       {m.imagePreview && <div style={{ marginBottom: 8, borderRadius: 12, overflow: "hidden", maxWidth: 200 }}><img src={m.imagePreview} alt="attachment" style={{ width: "100%", display: "block" }} /></div>}
-                      <div style={{ padding: m.role === "user" ? "10px 15px" : "0", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : 0, background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent", border: m.role === "user" ? `1px solid ${C.purple}44` : "none", fontSize: 13.5, color: "rgba(255,255,255,0.9)", fontFamily: "'Inter','DM Mono',sans-serif" }}>
-                        {m.role === "user" ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span> : <Markdown text={m.content} onArtifact={(a) => { setArtifact(a); setArtifactTab("preview"); }} />}
-                        {m.streaming && <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />}
-                      </div>
+                      {m.role === "user" && editingIdx === i ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <textarea autoFocus value={editVal} onChange={e => setEditVal(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const t = editVal.trim(); if (!t) return; const trimmed = msgs.slice(0, i); setMsgs(trimmed); setEditingIdx(null); setEditVal(""); send(t, trimmed); }
+                              if (e.key === "Escape") { setEditingIdx(null); setEditVal(""); }
+                            }}
+                            style={{ background: "rgba(255,255,255,0.07)", border: `1.5px solid ${C.purple}66`, borderRadius: 14, padding: "10px 14px", color: "#fff", fontSize: 13.5, fontFamily: "'Inter',sans-serif", resize: "none", outline: "none", lineHeight: 1.7, minHeight: 60 }} />
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                            <button onClick={() => { setEditingIdx(null); setEditVal(""); }} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Cancel</button>
+                            <button onClick={() => { const t = editVal.trim(); if (!t) return; const trimmed = msgs.slice(0, i); setMsgs(trimmed); setEditingIdx(null); setEditVal(""); send(t, trimmed); }} style={{ background: `linear-gradient(135deg,${C.purple},${C.cyan})`, border: "none", borderRadius: 8, padding: "4px 14px", cursor: "pointer", fontSize: 11, color: "#000", fontWeight: 700 }}>Resend ▶</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ position: "relative" }} className="msg-wrap">
+                          <div style={{ padding: m.role === "user" ? "10px 15px" : "0", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : 0, background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent", border: m.role === "user" ? `1px solid ${C.purple}44` : "none", fontSize: 13.5, color: "rgba(255,255,255,0.9)", fontFamily: "'Inter','DM Mono',sans-serif" }}>
+                            {m.role === "user" ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span> : <Markdown text={m.content} onArtifact={(a) => { setArtifact(a); setArtifactTab("preview"); }} />}
+                            {m.streaming && <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />}
+                          </div>
+                          {m.role === "user" && !loading && (
+                            <button onClick={() => { setEditingIdx(i); setEditVal(m.content); }}
+                              style={{ position: "absolute", top: -8, left: -28, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 22, height: 22, cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0 }}
+                              className="edit-btn">✎</button>
+                          )}
+                        </div>
+                      )}
                       {m.role === "assistant" && !m.streaming && m.content && (
                         <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
                           <button onClick={() => copyMsg(m.content, i)} style={{ background: copied === i ? `${C.green}18` : "rgba(255,255,255,0.04)", border: `1px solid ${copied === i ? C.green + "44" : "rgba(255,255,255,0.07)"}`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: copied === i ? C.green : "rgba(255,255,255,0.3)" }}>{copied === i ? "✓" : "⧉"}</button>
