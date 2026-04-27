@@ -8,6 +8,7 @@ import ArtifactPanel from "../components/ArtifactPanel";
 import Markdown from "../components/Markdown";
 
 const CMD_RE = /\[(IMAGE|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
+const getSRLang = () => sto.get("aura_lang", "en-US");
 
 const PLUS_OPTIONS = [
   { id: "camera",   icon: "📷", label: "Camera"       },
@@ -21,9 +22,9 @@ const PLUS_OPTIONS = [
 
 const QUICK = [
   "What can you do?",
-  "Generate an image of a futuristic African city",
-  "Write a business plan for a Nigerian startup",
-  "Translate 'good morning' to Yoruba",
+  "Build me a dark-themed landing page",
+  "Write a business plan for my startup",
+  "Explain quantum computing simply",
 ];
 
 
@@ -139,7 +140,7 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
   const startWake = useCallback(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
-    const r = new SR(); r.continuous = true; r.interimResults = true; r.lang = "en-US";
+    const r = new SR(); r.continuous = true; r.interimResults = true; r.lang = getSRLang();
     r.onstart  = () => setWakeOn(true);
     r.onend    = () => { setWakeOn(false); if (!listeningRef.current) setTimeout(startWake, 500); };
     r.onresult = (e) => {
@@ -182,7 +183,7 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
     listeningRef.current = true;
     setVoiceState("listening");
     setInterimText("");
-    const r = new SR(); r.lang = "en-US"; r.interimResults = true;
+    const r = new SR(); r.lang = getSRLang(); r.interimResults = true;
     voiceRecRef.current = r;
     let captured = "";
     r.onresult = (e) => {
@@ -269,7 +270,7 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
     wakeRef.current?.stop();
     listeningRef.current = true;
     setVoiceState("dictating");
-    const r = new SR(); r.lang = "en-US"; r.interimResults = false; r.maxAlternatives = 1;
+    const r = new SR(); r.lang = getSRLang(); r.interimResults = false; r.maxAlternatives = 1;
     let got = "";
     r.onresult = (e) => {
       got = Array.from(e.results).map(x => x[0].transcript).join(" ").trim();
