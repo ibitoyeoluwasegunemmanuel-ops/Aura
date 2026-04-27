@@ -400,8 +400,19 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
         setAttachment({ type: "image", file, preview: data, base64: data.split(",")[1], mediaType: file.type });
       };
       reader.readAsDataURL(file);
+    } else if (file.type === "application/pdf") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = e.target.result;
+        setAttachment({ type: "pdf", file, preview: null, base64: data.split(",")[1], mediaType: "application/pdf" });
+      };
+      reader.readAsDataURL(file);
     } else {
-      setAttachment({ type: "file", file, preview: null });
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAttachment({ type: "text", file, preview: null, textContent: e.target.result });
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -426,7 +437,7 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
     setInput("");
     const userMsg = {
       role: "user", type: "text",
-      content: t || (attachment?.type === "file" ? `[File: ${attachment.file.name}]` : "Describe this image."),
+      content: t || (attachment?.type === "pdf" ? `Analyze PDF: ${attachment.file.name}` : attachment?.type === "text" ? `Analyze file: ${attachment.file.name}` : "Describe this image."),
     };
     if (attachment?.preview) userMsg.imagePreview = attachment.preview;
     const history = [...msgs, userMsg];
@@ -438,11 +449,20 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
     setMsgs(m => [...m, { role: "assistant", type: "text", content: "", id: pid, streaming: true }]);
 
     const apiMsgs = history.map((msg, idx) => {
-      if (idx === history.length - 1 && att?.base64) {
+      if (idx === history.length - 1 && att?.type === "image" && att.base64) {
         return { role: msg.role, content: [
           { type: "image", source: { type: "base64", media_type: att.mediaType, data: att.base64 } },
           { type: "text", text: t || "What do you see?" },
         ]};
+      }
+      if (idx === history.length - 1 && att?.type === "pdf" && att.base64) {
+        return { role: msg.role, content: [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: att.base64 } },
+          { type: "text", text: t || "Summarize this PDF. List the key points." },
+        ]};
+      }
+      if (idx === history.length - 1 && att?.type === "text" && att.textContent) {
+        return { role: msg.role, content: `${t || "Analyze this file:"}\n\nFile: ${att.file.name}\n\n${att.textContent.slice(0, 8000)}` };
       }
       return { role: msg.role, content: msg.content };
     });
@@ -579,9 +599,9 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
             <div style={{ width: "100%", marginTop: 4 }}>
               {attachment && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  {attachment.preview
+                  {attachment.type === "image" && attachment.preview
                     ? <img src={attachment.preview} alt="attach" style={{ height: 48, borderRadius: 8, border: `1px solid ${C.border}` }} />
-                    : <div style={{ fontSize: 11, color: C.cyan, background: `${C.cyan}15`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "4px 10px" }}>📎 {attachment.file.name}</div>}
+                    : <div style={{ fontSize: 11, color: attachment.type === "pdf" ? C.red || "#ff6b6b" : C.cyan, background: attachment.type === "pdf" ? "rgba(255,107,107,0.1)" : `${C.cyan}15`, border: `1px solid ${attachment.type === "pdf" ? "rgba(255,107,107,0.3)" : C.cyan + "33"}`, borderRadius: 8, padding: "4px 10px" }}>{attachment.type === "pdf" ? "📄" : "📎"} {attachment.file.name}</div>}
                   <button onClick={() => setAttachment(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 16 }}>✕</button>
                 </div>
               )}
@@ -685,9 +705,9 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
       {hasMessages && <div style={{ padding: "8px 12px 18px", borderTop: `1px solid ${C.border}`, flexShrink: 0, background: `${C.bg}f4`, backdropFilter: "blur(20px)" }}>
         {attachment && (
           <div style={{ maxWidth: 760, margin: "0 auto 8px", display: "flex", alignItems: "center", gap: 8 }}>
-            {attachment.preview
+            {attachment.type === "image" && attachment.preview
               ? <img src={attachment.preview} alt="attach" style={{ height: 48, borderRadius: 8, border: `1px solid ${C.border}` }} />
-              : <div style={{ fontSize: 11, color: C.cyan, background: `${C.cyan}15`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "4px 10px" }}>📎 {attachment.file.name}</div>}
+              : <div style={{ fontSize: 11, color: attachment.type === "pdf" ? "#ff6b6b" : C.cyan, background: attachment.type === "pdf" ? "rgba(255,107,107,0.1)" : `${C.cyan}15`, border: `1px solid ${attachment.type === "pdf" ? "rgba(255,107,107,0.3)" : C.cyan + "33"}`, borderRadius: 8, padding: "4px 10px" }}>{attachment.type === "pdf" ? "📄" : "📎"} {attachment.file.name}</div>}
             <button onClick={() => setAttachment(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 16 }}>✕</button>
           </div>
         )}
