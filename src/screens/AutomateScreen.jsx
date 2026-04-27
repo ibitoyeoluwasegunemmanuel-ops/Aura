@@ -139,7 +139,7 @@ export default function AutomateScreen({ auraName }) {
         <Lbl color={C.green}>📱 WhatsApp Quick Send</Lbl>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>Open WhatsApp with any number — no need to save contact.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <Inp value={waNum} onChange={e => setWaNum(e.target.value)} placeholder="+234 800 000 0000 (include country code)" />
+          <Inp value={waNum} onChange={e => setWaNum(e.target.value)} placeholder="+1 555 000 0000 (include country code)" />
           <textarea value={waMsg} onChange={e => setWaMsg(e.target.value)} placeholder="Optional pre-filled message..." rows={2}
             style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", color: "#fff", fontSize: 12, fontFamily: "'DM Mono',monospace", resize: "none", outline: "none", lineHeight: 1.5 }} />
           <Btn color={C.green} onClick={openWhatsApp} style={{ width: "100%" }}>📱 Open in WhatsApp</Btn>

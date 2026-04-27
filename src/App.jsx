@@ -155,6 +155,9 @@ export default function AuraOS() {
     setAgentMode(agent);
     setView("chat");
     setSidebarOpen(false);
+    // Track recently used agents (last 6, no duplicates)
+    const recent = sto.get("recent_agents", []).filter(a => a.id !== agent.id);
+    sto.set("recent_agents", [agent, ...recent].slice(0, 6));
   };
 
   const selectSession = (id) => {

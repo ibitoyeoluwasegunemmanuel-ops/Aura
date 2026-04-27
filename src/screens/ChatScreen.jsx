@@ -357,7 +357,7 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
     setInput("");
     setSuggestions([]);
     const userMsg = {
-      role: "user", type: "text",
+      role: "user", type: "text", ts: Date.now(),
       content: t || (attachment?.type === "pdf" ? `Analyze PDF: ${attachment.file.name}` : attachment?.type === "text" ? `Analyze file: ${attachment.file.name}` : "Describe this image."),
     };
     if (attachment?.preview) userMsg.imagePreview = attachment.preview;
@@ -367,22 +367,25 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
     setAttachment(null);
     setLoading(true);
     const pid = Date.now();
-    setMsgs(m => [...m, { role: "assistant", type: "text", content: "", id: pid, streaming: true }]);
+    setMsgs(m => [...m, { role: "assistant", type: "text", content: "", id: pid, streaming: true, ts: Date.now() }]);
 
-    const apiMsgs = history.map((msg, idx) => {
-      if (idx === history.length - 1 && att?.type === "image" && att.base64) {
+    // Keep last 30 messages to stay within context limits
+    const trimmedHistory = history.length > 30 ? history.slice(-30) : history;
+    const apiMsgs = trimmedHistory.map((msg, idx) => {
+      const isLast = idx === trimmedHistory.length - 1;
+      if (isLast && att?.type === "image" && att.base64) {
         return { role: msg.role, content: [
           { type: "image", source: { type: "base64", media_type: att.mediaType, data: att.base64 } },
           { type: "text", text: t || "What do you see?" },
         ]};
       }
-      if (idx === history.length - 1 && att?.type === "pdf" && att.base64) {
+      if (isLast && att?.type === "pdf" && att.base64) {
         return { role: msg.role, content: [
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: att.base64 } },
           { type: "text", text: t || "Summarize this PDF. List the key points." },
         ]};
       }
-      if (idx === history.length - 1 && att?.type === "text" && att.textContent) {
+      if (isLast && att?.type === "text" && att.textContent) {
         return { role: msg.role, content: `${t || "Analyze this file:"}\n\nFile: ${att.file.name}\n\n${att.textContent.slice(0, 8000)}` };
       }
       return { role: msg.role, content: msg.content };
@@ -580,7 +583,10 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
           <div style={{ flex: 1, padding: "20px 14px 8px", display: "flex", flexDirection: "column", gap: 22, maxWidth: 760, margin: "0 auto", width: "100%" }}>
             {msgs.map((m, i) => (
               <div key={i} style={{ display: "flex", gap: 10, justifyContent: m.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start" }}>
-                {m.role === "assistant" && <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, marginTop: 2 }}>◈</div>}
+                {m.role === "assistant" && <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>◈</div>
+                  {m.ts && !m.streaming && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", whiteSpace: "nowrap" }}>{new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>}
+                </div>}
                 <div style={{ maxWidth: m.role === "user" ? "75%" : "86%" }}>
                   {(!m.type || m.type === "text") && (
                     <>
@@ -651,7 +657,10 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
                     </div>
                   )}
                 </div>
-                {m.role === "user" && <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.purple}88,${C.cyan}44)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#fff", fontWeight: 700, marginTop: 2 }}>{userName ? userName[0].toUpperCase() : "U"}</div>}
+                {m.role === "user" && <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: `linear-gradient(135deg,${C.purple}88,${C.cyan}44)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#fff", fontWeight: 700 }}>{userName ? userName[0].toUpperCase() : "U"}</div>
+                  {m.ts && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", whiteSpace: "nowrap" }}>{new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>}
+                </div>}
               </div>
             ))}
             {loading && !msgs.find(m => m.streaming) && (

@@ -49,10 +49,8 @@ export default function DesignScreen({ auraName }) {
       await callClaudeStream(
         [{ role: "user", content: `Design request: ${prompt.trim()}\n\nGenerate a complete, stunning HTML page for this. Output ONLY the raw HTML — no markdown, no code fences, no explanation.` }],
         DESIGN_SYSTEM,
-        (chunk) => {
-          full += chunk;
-          setStreaming(full);
-        }
+        (chunk) => { full += chunk; setStreaming(full); },
+        undefined, false, 8192
       );
       const cleaned = full.trim().replace(/^```html?\s*/i, "").replace(/```\s*$/i, "");
       setHtml(cleaned);

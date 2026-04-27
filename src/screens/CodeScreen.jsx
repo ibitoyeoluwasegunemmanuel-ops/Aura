@@ -107,7 +107,8 @@ When asked to write/modify code, output the complete updated file content inside
 // full file content here
 \`\`\`
 Only output the raw code block for the file, nothing else.`,
-        (chunk) => { full += chunk; }
+        (chunk) => { full += chunk; },
+        undefined, false, 6144
       );
       const match = full.match(/```[\w]*\n([\s\S]*?)```/);
       if (match) {

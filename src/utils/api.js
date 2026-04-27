@@ -12,10 +12,10 @@ export async function callClaude(messages, system = "", maxTokens = 1024) {
   return d.content?.[0]?.text || "";
 }
 
-export async function callClaudeStream(messages, system = "", onChunk, onThinking, useThinking = false) {
+export async function callClaudeStream(messages, system = "", onChunk, onThinking, useThinking = false, maxTokens = 4096) {
   const body = {
     model: "claude-sonnet-4-6",
-    max_tokens: useThinking ? 16000 : 1024,
+    max_tokens: useThinking ? 16000 : maxTokens,
     system,
     messages,
     stream: true,
