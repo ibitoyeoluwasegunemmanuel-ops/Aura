@@ -43,6 +43,12 @@ export default function AuraOS() {
   const [darkMode, setDarkMode]       = useState(() => sto.get("aura_dark_mode", true));
   const [renamingId, setRenamingId]   = useState(null);
   const [renameVal, setRenameVal]     = useState("");
+  const [projects, setProjects]       = useState(() => sto.get("aura_projects", []));
+  const [activeProjectId, setActiveProjectId] = useState(null);
+  const [showNewProject, setShowNewProject]   = useState(false);
+  const [newProjName, setNewProjName]         = useState("");
+  const [newProjInstr, setNewProjInstr]       = useState("");
+  const [newProjEmoji, setNewProjEmoji]       = useState("📁");
   const touchStartX = useRef(0);
 
   const theme = darkMode ? {
@@ -92,6 +98,29 @@ export default function AuraOS() {
   const handleName   = n => { setAuraName(n); sto.set("aura_name", n); };
   const handleLogin  = s => setSession(s);
   const handleLogout = () => { auth.logout(); setSession(null); };
+
+  const activeProject = projects.find(p => p.id === activeProjectId) || null;
+
+  const createProject = () => {
+    const name = newProjName.trim();
+    if (!name) return;
+    const p = { id: makeSid(), name, emoji: newProjEmoji, instructions: newProjInstr.trim() };
+    const updated = [...projects, p];
+    setProjects(updated);
+    sto.set("aura_projects", updated);
+    setActiveProjectId(p.id);
+    setShowNewProject(false);
+    setNewProjName(""); setNewProjInstr(""); setNewProjEmoji("📁");
+    newChat();
+  };
+
+  const deleteProject = (e, id) => {
+    e.stopPropagation();
+    const updated = projects.filter(p => p.id !== id);
+    setProjects(updated);
+    sto.set("aura_projects", updated);
+    if (activeProjectId === id) setActiveProjectId(null);
+  };
 
   const switchMode = (mode) => {
     setChatMode(mode.id);
@@ -239,6 +268,50 @@ export default function AuraOS() {
           })}
         </div>
 
+        {/* Projects */}
+        <div style={{ padding: "8px 10px 4px", borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <div style={{ fontSize: 9, color: theme.textFaint, letterSpacing: 2, padding: "0 4px", textTransform: "uppercase", fontWeight: 700 }}>Projects</div>
+            <button onClick={() => setShowNewProject(s => !s)} title="New project"
+              style={{ background: `${C.gold}14`, border: `1px solid ${C.gold}28`, borderRadius: 6, width: 22, height: 22, cursor: "pointer", color: C.gold, fontSize: 14, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>+</button>
+          </div>
+          {showNewProject && (
+            <div style={{ background: `${C.gold}08`, border: `1px solid ${C.gold}22`, borderRadius: 10, padding: "10px 10px 8px", marginBottom: 6 }}>
+              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                <select value={newProjEmoji} onChange={e => setNewProjEmoji(e.target.value)}
+                  style={{ background: theme.inputBg, border: `1px solid ${C.gold}33`, borderRadius: 6, padding: "4px 4px", color: theme.text, fontSize: 16, fontFamily: "'DM Mono',monospace", outline: "none", width: 44, cursor: "pointer" }}>
+                  {["📁","💼","🚀","🎨","⌨️","🔬","🧠","🌍","💡","🔥"].map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+                <input value={newProjName} onChange={e => setNewProjName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") createProject(); if (e.key === "Escape") setShowNewProject(false); }}
+                  placeholder="Project name…"
+                  style={{ flex: 1, background: theme.inputBg, border: `1px solid ${C.gold}33`, borderRadius: 6, padding: "4px 8px", color: theme.text, fontSize: 12, fontFamily: "'DM Mono',monospace", outline: "none" }} />
+              </div>
+              <textarea value={newProjInstr} onChange={e => setNewProjInstr(e.target.value)}
+                placeholder="Custom instructions (e.g. 'Always respond in Yoruba. Focus on Nigerian market.')…"
+                style={{ width: "100%", background: theme.inputBg, border: `1px solid ${C.gold}22`, borderRadius: 6, padding: "6px 8px", color: theme.text, fontSize: 11, fontFamily: "'DM Mono',monospace", resize: "none", outline: "none", height: 52, lineHeight: 1.5, boxSizing: "border-box" }} />
+              <button onClick={createProject}
+                style={{ marginTop: 6, width: "100%", background: `${C.gold}18`, border: `1px solid ${C.gold}44`, borderRadius: 6, padding: "6px", cursor: "pointer", fontSize: 11, color: C.gold, fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>
+                Create Project
+              </button>
+            </div>
+          )}
+          {projects.map(p => (
+            <div key={p.id} onClick={() => { setActiveProjectId(p.id); setSidebarOpen(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, cursor: "pointer", marginBottom: 1, background: activeProjectId === p.id ? `${C.gold}10` : "transparent", borderLeft: activeProjectId === p.id ? `3px solid ${C.gold}88` : "3px solid transparent", position: "relative" }}
+              onMouseEnter={e => { if (activeProjectId !== p.id) e.currentTarget.style.background = theme.hover; e.currentTarget.querySelector(".proj-del").style.opacity = "1"; }}
+              onMouseLeave={e => { if (activeProjectId !== p.id) e.currentTarget.style.background = "transparent"; e.currentTarget.querySelector(".proj-del").style.opacity = "0"; }}>
+              <span style={{ fontSize: 14, flexShrink: 0 }}>{p.emoji}</span>
+              <span style={{ fontSize: 12, color: activeProjectId === p.id ? C.gold : theme.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+              <button className="proj-del" onClick={e => deleteProject(e, p.id)}
+                style={{ background: "none", border: "none", color: theme.textFaint, cursor: "pointer", fontSize: 11, padding: "2px 3px", lineHeight: 1, opacity: 0, transition: "opacity 0.12s", flexShrink: 0 }}>✕</button>
+            </div>
+          ))}
+          {projects.length === 0 && !showNewProject && (
+            <div style={{ fontSize: 10, color: theme.textFaint, padding: "4px 4px 2px", lineHeight: 1.5 }}>No projects yet. Create one for custom AI contexts.</div>
+          )}
+        </div>
+
         {/* Sessions */}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
           {sessions.length > 0 && <div style={{ fontSize: 9, color: theme.textFaint, letterSpacing: 2, padding: "4px 4px 6px", textTransform: "uppercase", fontWeight: 700 }}>Recent</div>}
@@ -349,6 +422,7 @@ export default function AuraOS() {
               onSessionUpdate={updateSession}
               agentMode={agentMode}
               modePrompt={agentMode ? "" : (MODES.find(m => m.id === chatMode)?.prompt || "")}
+              projectPrompt={activeProject?.instructions || ""}
             />
           )}
           {view === "settings" && (

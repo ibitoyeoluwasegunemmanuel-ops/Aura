@@ -301,7 +301,7 @@ function renderInline(text) {
   return parts.length ? parts : text;
 }
 
-export default function ChatScreen({ auraName, authSession, chatSessionId, onSessionUpdate, agentMode, modePrompt }) {
+export default function ChatScreen({ auraName, authSession, chatSessionId, onSessionUpdate, agentMode, modePrompt, projectPrompt }) {
   const [msgs, setMsgs]               = useState(() => sto.get("msgs_" + chatSessionId, []));
   const [input, setInput]             = useState("");
   const [loading, setLoading]         = useState(false);
@@ -318,6 +318,7 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const [editVal, setEditVal]         = useState("");
   const [artifact, setArtifact]       = useState(null); // { type: "html"|"mermaid", code, title }
   const [artifactTab, setArtifactTab] = useState("preview"); // "preview" | "code"
+  const [suggestions, setSuggestions] = useState([]);
 
   const endRef       = useRef();
   const artifactRef  = useRef(null);
@@ -354,11 +355,18 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
     ? `\n\nCURRENT OPEN DESIGN (already rendered in the live preview panel):\n\`\`\`html\n${artifact.code}\n\`\`\`\nIf the user asks to change, update, edit, modify, improve, or fix this design → output a complete revised \`\`\`html code block with ALL changes applied. Keep everything else intact.`
     : "";
 
+  const FOLLOWUPS_RULE = `
+
+After every conversational reply (skip for pure code/HTML/image outputs), end with exactly this on a new line:
+[FOLLOWUPS: Question 1 | Question 2 | Question 3]
+Keep each question under 9 words. Make them directly relevant to the current topic.`;
+
   const SYSTEM = agentMode
     ? `${agentMode.prompt}
 
 ${FOUNDER_SYSTEM_BLOCK}
 ${userProfile?.name ? `\nUser's name: ${userProfile.name}. Role: ${userProfile.role || ""}. Preferences: ${userProfile.preferences || ""}. Projects: ${userProfile.projects || ""}.` : ""}
+${projectPrompt ? `\nPROJECT CONTEXT:\n${projectPrompt}` : ""}
 
 Response style: Be direct and expert. Sound natural and confident. Use emojis naturally.
 
@@ -367,11 +375,12 @@ Special commands (emit on own line when relevant):
 [LOCATION] — get GPS
 [OPEN: url] — open website
 
-DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth animations (cubic-bezier transitions), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality.${artifactContext}${memoryBlock}`
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth animations (cubic-bezier transitions), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality.${artifactContext}${memoryBlock}${FOLLOWUPS_RULE}`
     : `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
 ${modePrompt ? `\n${modePrompt}` : ""}
 ${userProfile?.name ? `\nUser's name: ${userProfile.name}. Role: ${userProfile.role || ""}. Preferences: ${userProfile.preferences || ""}. Projects: ${userProfile.projects || ""}.` : ""}
+${projectPrompt ? `\nPROJECT CONTEXT:\n${projectPrompt}` : ""}
 
 Response style: Be direct. Sound natural and confident. Use emojis naturally.
 
@@ -382,7 +391,7 @@ Special commands (emit on own line when relevant):
 
 DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth transitions (cubic-bezier), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality. This renders live in AURA's preview panel.
 
-REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code block. Define an \`App\` function component. Use inline styles or plain CSS. No imports needed — React is available globally.${artifactContext}${memoryBlock}`;
+REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code block. Define an \`App\` function component. Use inline styles or plain CSS. No imports needed — React is available globally.${artifactContext}${memoryBlock}${FOLLOWUPS_RULE}`;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -611,6 +620,7 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
     const t = (text || input).trim();
     if ((!t && !attachment) || loading) return;
     setInput("");
+    setSuggestions([]);
     const userMsg = {
       role: "user", type: "text",
       content: t || (attachment?.type === "pdf" ? `Analyze PDF: ${attachment.file.name}` : attachment?.type === "text" ? `Analyze file: ${attachment.file.name}` : "Describe this image."),
@@ -680,7 +690,11 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
         const url = full.match(/\[OPEN:\s*(.+?)\]/)?.[1]?.trim();
         if (url) window.open(url.startsWith("http") ? url : `https://${url}`, "_blank");
       }
-      const clean = full.replace(CMD_RE, "").trim();
+      const rawClean = full.replace(CMD_RE, "").trim();
+      const followRe = /\[FOLLOWUPS:\s*([^\]]+)\]/i;
+      const followMatch = rawClean.match(followRe);
+      setSuggestions(followMatch ? followMatch[1].split("|").map(s => s.trim()).filter(Boolean).slice(0, 3) : []);
+      const clean = rawClean.replace(followRe, "").trim();
       setMsgs(m => {
         let updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
         if (extra.length) updated = [...updated, ...extra];
@@ -860,10 +874,24 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
                         </div>
                       )}
                       {m.role === "assistant" && !m.streaming && m.content && (
-                        <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
-                          <button onClick={() => copyMsg(m.content, i)} style={{ background: copied === i ? `${C.green}18` : "rgba(255,255,255,0.04)", border: `1px solid ${copied === i ? C.green + "44" : "rgba(255,255,255,0.07)"}`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: copied === i ? C.green : "rgba(255,255,255,0.3)" }}>{copied === i ? "✓" : "⧉"}</button>
-                          <button onClick={() => speakFull(m.content)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>🔊</button>
-                        </div>
+                        <>
+                          <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
+                            <button onClick={() => copyMsg(m.content, i)} style={{ background: copied === i ? `${C.green}18` : "rgba(255,255,255,0.04)", border: `1px solid ${copied === i ? C.green + "44" : "rgba(255,255,255,0.07)"}`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: copied === i ? C.green : "rgba(255,255,255,0.3)" }}>{copied === i ? "✓" : "⧉"}</button>
+                            <button onClick={() => speakFull(m.content)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>🔊</button>
+                          </div>
+                          {i === msgs.length - 1 && suggestions.length > 0 && !loading && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                              {suggestions.map((s, si) => (
+                                <button key={si} onClick={() => { setSuggestions([]); send(s); }}
+                                  style={{ background: `${C.cyan}08`, border: `1px solid ${C.cyan}28`, borderRadius: 20, padding: "5px 13px", cursor: "pointer", fontSize: 11, color: C.cyan, fontFamily: "'Inter',sans-serif", textAlign: "left", transition: "background 0.15s" }}
+                                  onMouseEnter={e => e.currentTarget.style.background = `${C.cyan}18`}
+                                  onMouseLeave={e => e.currentTarget.style.background = `${C.cyan}08`}>
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   )}
