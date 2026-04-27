@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { C } from "../theme/colors";
 import { callClaudeStream, genImgEnhanced, webSearch } from "../utils/api";
