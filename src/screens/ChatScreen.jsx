@@ -213,7 +213,7 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
         SYSTEM + "\n\nVOICE MODE: Max 2-3 sentences. Direct and conversational. No markdown.",
         (chunk) => { full += chunk; setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x)); }
       );
-      const clean = full.replace(CMD_RE, "").trim();
+      const clean = full.replace(CMD_RE, "").replace(/\[FOLLOWUPS:[^\]]*\]/i, "").trim();
       setMsgs(m => {
         const updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
         sto.set("msgs_" + chatSessionId, updated);
@@ -424,7 +424,9 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
       setMsgs(m => {
         let updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
         if (extra.length) updated = [...updated, ...extra];
-        sto.set("msgs_" + chatSessionId, updated);
+        // Strip large base64 payloads before persisting — keeps localStorage lean
+        const toStore = updated.map(({ imagePreview, ...rest }) => rest);
+        sto.set("msgs_" + chatSessionId, toStore);
         const first = updated.find(x => x.role === "user")?.content || "";
         onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Chat", clean.slice(0, 60));
         return updated;
