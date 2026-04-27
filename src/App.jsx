@@ -14,6 +14,7 @@ import AutomateScreen    from "./screens/AutomateScreen";
 import NavigateScreen    from "./screens/NavigateScreen";
 import TranslateScreen   from "./screens/TranslateScreen";
 import CodeScreen        from "./screens/CodeScreen";
+import GalleryScreen     from "./screens/GalleryScreen";
 import OnboardingScreen  from "./screens/OnboardingScreen";
 import Sidebar           from "./components/Sidebar";
 
@@ -54,6 +55,7 @@ export default function AuraOS() {
   const [searchOpen, setSearchOpen]           = useState(false);
   const [searchQ, setSearchQ]                 = useState("");
   const [installPrompt, setInstallPrompt]     = useState(null);
+  const [accentColor, setAccentColor]         = useState(() => sto.get("aura_accent", "#00ffe5"));
   const touchStartX = useRef(0);
 
   const theme = darkMode ? {
@@ -114,6 +116,12 @@ export default function AuraOS() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  const handleAccentChange = (hex) => {
+    setAccentColor(hex);
+    sto.set("aura_accent", hex);
+    document.documentElement.style.setProperty("--aura-accent", hex);
+  };
 
   const triggerInstall = async () => {
     if (!installPrompt) return;
@@ -229,7 +237,7 @@ export default function AuraOS() {
     });
   };
 
-  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : view === "agents" ? "AI Agents" : view === "design" ? "Design Brain" : view === "automate" ? "Automate" : view === "navigate" ? "Navigate" : view === "translate" ? "Translate" : view === "code" ? "Code Workspace" : (sessions.find(s => s.id === activeSid)?.title || auraName);
+  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : view === "agents" ? "AI Agents" : view === "design" ? "Design Brain" : view === "automate" ? "Automate" : view === "navigate" ? "Navigate" : view === "translate" ? "Translate" : view === "code" ? "Code Workspace" : view === "gallery" ? "Gallery" : (sessions.find(s => s.id === activeSid)?.title || auraName);
 
   if (!session) return (
     <>
@@ -254,7 +262,7 @@ export default function AuraOS() {
 
   return (
     <div style={{ height: "100dvh", minHeight: "-webkit-fill-available", background: theme.bg, fontFamily: "'DM Mono',monospace", color: theme.text, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
-      <style>{CSS}</style>
+      <style>{CSS + `:root{--aura-accent:${accentColor};}`}</style>
 
       {darkMode && <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: `linear-gradient(${C.cyan}03 1px,transparent 1px),linear-gradient(90deg,${C.cyan}03 1px,transparent 1px)`, backgroundSize: "44px 44px", zIndex: 0 }} />}
 
@@ -300,7 +308,7 @@ export default function AuraOS() {
         </div>
 
         {/* Screen content */}
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", paddingBottom: "env(safe-area-inset-bottom)" }}>
           {view === "chat" && (
             <ChatScreen
               key={activeSid}
@@ -321,6 +329,8 @@ export default function AuraOS() {
               onLogout={handleLogout}
               canInstall={!!installPrompt}
               onInstall={triggerInstall}
+              accentColor={accentColor}
+              onAccentChange={handleAccentChange}
             />
           )}
           {view === "admin" && (
@@ -346,7 +356,27 @@ export default function AuraOS() {
           {view === "code" && (
             <CodeScreen auraName={auraName} />
           )}
+          {view === "gallery" && (
+            <GalleryScreen />
+          )}
         </div>
+      </div>
+
+      {/* ── MOBILE BOTTOM NAV ── */}
+      <div className="bottom-nav" style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 56, background: "#08080f", borderTop: `1px solid ${theme.border}`, alignItems: "stretch", zIndex: 200, backdropFilter: "blur(20px)" }}>
+        {[
+          { icon: "💬", label: "Chat",    v: "chat"     },
+          { icon: "🤖", label: "Agents",  v: "agents"   },
+          { icon: "🖼️", label: "Gallery", v: "gallery"  },
+          { icon: "⌨️", label: "Code",    v: "code"     },
+          { icon: "⚙️", label: "Settings",v: "settings" },
+        ].map(tab => (
+          <button key={tab.v} onClick={() => setView(tab.v)}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: view === tab.v ? accentColor : "rgba(255,255,255,0.3)", transition: "color 0.15s", padding: "0 2px" }}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>{tab.icon}</span>
+            <span style={{ fontSize: 9, letterSpacing: 0.3, fontFamily: "'DM Mono',monospace", fontWeight: view === tab.v ? 700 : 400 }}>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* ── SEARCH OVERLAY ── */}

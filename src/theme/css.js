@@ -11,10 +11,13 @@ export const CSS = `
   @keyframes heartPop{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
   @keyframes entrySlide{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:translateX(0)}}
   @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+  :root{--aura-accent:#00ffe5;}
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{height:100%;overflow:hidden;}
   ::-webkit-scrollbar{width:3px;background:transparent;}
   ::-webkit-scrollbar-thumb{background:rgba(0,255,229,0.12);border-radius:3px;}
   textarea::placeholder,input::placeholder{color:rgba(255,255,255,0.18);}
   select option{background:#111;color:#fff;}
+  .bottom-nav{display:flex;}
+  @media(min-width:768px){.bottom-nav{display:none!important;}}
 `;
