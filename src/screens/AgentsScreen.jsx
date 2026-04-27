@@ -1,10 +1,12 @@
 import { useState, useMemo } from "react";
 import { C } from "../theme/colors";
 import { AGENTS, AGENT_CATEGORIES } from "../data/agents";
+import { sto } from "../utils/storage";
 
 export default function AgentsScreen({ onLaunch }) {
-  const [search, setSearch]   = useState("");
+  const [search, setSearch]     = useState("");
   const [category, setCategory] = useState("All");
+  const [recentAgents]          = useState(() => sto.get("recent_agents", []));
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -53,6 +55,28 @@ export default function AgentsScreen({ onLaunch }) {
           })}
         </div>
       </div>
+
+      {/* Recently used */}
+      {recentAgents.length > 0 && !search && category === "All" && (
+        <div style={{ padding: "0 16px 12px", flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: 2, marginBottom: 8, textTransform: "uppercase" }}>Recently Used</div>
+          <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+            {recentAgents.map(agent => {
+              const INDUSTRY_COLORS = { Healthcare: C.green, Finance: C.gold, Education: C.cyan, Legal: C.purple, Cybersecurity: C.red, Marketing: "#f953c6", Research: C.purple, Productivity: C.cyan };
+              const color = INDUSTRY_COLORS[agent.industry] || C.cyan;
+              return (
+                <div key={agent.id} onClick={() => onLaunch(agent)}
+                  style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", background: `${color}10`, border: `1px solid ${color}33`, borderRadius: 12, cursor: "pointer", transition: "all 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `${color}20`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = `${color}10`; }}>
+                  <span style={{ fontSize: 16 }}>{agent.emoji}</span>
+                  <span style={{ fontSize: 11, color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>{agent.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Results count */}
       <div style={{ padding: "0 16px 8px", flexShrink: 0 }}>

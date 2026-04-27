@@ -4,17 +4,24 @@ import { CSS }  from "./theme/css";
 import { sto }  from "./utils/storage";
 import { auth } from "./utils/auth";
 import { Modal, Progress } from "./components/ui";
-import AuthScreen      from "./screens/AuthScreen";
-import AdminDashboard  from "./screens/AdminDashboard";
-import ChatScreen      from "./screens/ChatScreen";
-import SettingsScreen  from "./screens/SettingsScreen";
-import AgentsScreen    from "./screens/AgentsScreen";
+import AuthScreen        from "./screens/AuthScreen";
+import AdminDashboard    from "./screens/AdminDashboard";
+import ChatScreen        from "./screens/ChatScreen";
+import SettingsScreen    from "./screens/SettingsScreen";
+import AgentsScreen      from "./screens/AgentsScreen";
+import DesignScreen      from "./screens/DesignScreen";
+import AutomateScreen    from "./screens/AutomateScreen";
+import NavigateScreen    from "./screens/NavigateScreen";
+import TranslateScreen   from "./screens/TranslateScreen";
+import CodeScreen        from "./screens/CodeScreen";
+import OnboardingScreen  from "./screens/OnboardingScreen";
+import Sidebar           from "./components/Sidebar";
 
 const MODES = [
-  { id: "chat",     icon: "💬", name: "AURA Chat",     label: "General AI",     color: C.cyan,    prompt: "" },
-  { id: "code",     icon: "⌨️",  name: "AURA Code",     label: "Dev & Debug",    color: "#4ade80", prompt: "You are AURA Code — an expert software engineer. Prioritise clean, working code. Always show code blocks. Explain your reasoning briefly." },
-  { id: "design",   icon: "🎨", name: "AURA Design",   label: "UI & Creative",  color: C.purple,  prompt: "You are AURA Design — a world-class UI/UX designer and creative director. Think visually, suggest layouts, colours, and user experiences. Be specific and inspiring." },
-  { id: "research", icon: "🔬", name: "AURA Research",  label: "Deep Analysis",  color: C.gold,    prompt: "You are AURA Research — a rigorous analyst and researcher. Provide detailed, sourced, well-structured answers. Use bullet points and section headers. Be thorough." },
+  { id: "chat",     icon: "💬", name: "AURA Chat",    label: "General AI",    color: C.cyan,    prompt: "" },
+  { id: "code",     icon: "⌨️",  name: "AURA Code",    label: "Dev & Debug",   color: "#4ade80", prompt: "You are AURA Code — an expert software engineer. Prioritise clean, working code. Always show code blocks. Explain your reasoning briefly." },
+  { id: "design",   icon: "🎨", name: "AURA Design",  label: "UI & Creative", color: C.purple,  prompt: "You are AURA Design — a world-class UI/UX designer and creative director. Think visually, suggest layouts, colours, and user experiences. Be specific and inspiring." },
+  { id: "research", icon: "🔬", name: "AURA Research", label: "Deep Analysis", color: C.gold,    prompt: "You are AURA Research — a rigorous analyst and researcher. Provide detailed, sourced, well-structured answers. Use bullet points and section headers. Be thorough." },
 ];
 
 function makeSid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -40,7 +47,28 @@ export default function AuraOS() {
   const [showProfile, setShowProfile] = useState(false);
   const [agentMode, setAgentMode]     = useState(null);
   const [chatMode, setChatMode]       = useState(() => sto.get("aura_chat_mode", "chat"));
+  const [darkMode, setDarkMode]       = useState(() => sto.get("aura_dark_mode", true));
+  const [projects, setProjects]               = useState(() => sto.get("aura_projects", []));
+  const [activeProjectId, setActiveProjectId] = useState(null);
+  const [onboarded, setOnboarded]             = useState(() => sto.get("aura_onboarded", false));
+  const [searchOpen, setSearchOpen]           = useState(false);
+  const [searchQ, setSearchQ]                 = useState("");
+  const [installPrompt, setInstallPrompt]     = useState(null);
   const touchStartX = useRef(0);
+
+  const theme = darkMode ? {
+    bg: "#02020a", sidebar: "#04040e", topbar: "#02020af2",
+    text: "#fff", textDim: "rgba(255,255,255,0.45)", textFaint: "rgba(255,255,255,0.18)",
+    border: "rgba(255,255,255,0.07)", hover: "rgba(255,255,255,0.05)",
+    inputBg: "rgba(255,255,255,0.04)",
+  } : {
+    bg: "#f0f2f8", sidebar: "#ffffff", topbar: "#f0f2f8",
+    text: "#0f0f1a", textDim: "rgba(0,0,0,0.55)", textFaint: "rgba(0,0,0,0.3)",
+    border: "rgba(0,0,0,0.09)", hover: "rgba(0,0,0,0.04)",
+    inputBg: "rgba(0,0,0,0.04)",
+  };
+
+  const toggleDark = () => { const v = !darkMode; setDarkMode(v); sto.set("aura_dark_mode", v); };
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -70,11 +98,72 @@ export default function AuraOS() {
     return () => { window.removeEventListener("touchstart", onStart); window.removeEventListener("touchend", onEnd); };
   }, [view]);
 
+  // Capture PWA install prompt
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  // Global keyboard: Ctrl+K → search, Escape → close search
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); setSearchOpen(s => !s); setSearchQ(""); }
+      if (e.key === "Escape") setSearchOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const triggerInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") setInstallPrompt(null);
+  };
+
+  // Search across all sessions
+  const searchResults = searchQ.trim().length > 1
+    ? sessions.flatMap(s => {
+        const msgs = sto.get("msgs_" + s.id, []);
+        return msgs
+          .filter(m => m.content?.toLowerCase().includes(searchQ.toLowerCase()))
+          .slice(0, 3)
+          .map(m => ({ sid: s.id, title: s.title, snippet: m.content.slice(0, 120), role: m.role }));
+      }).slice(0, 12)
+    : [];
+
   const goBack = () => setView("chat");
 
   const handleName   = n => { setAuraName(n); sto.set("aura_name", n); };
   const handleLogin  = s => setSession(s);
   const handleLogout = () => { auth.logout(); setSession(null); };
+
+  const activeProject = projects.find(p => p.id === activeProjectId) || null;
+
+  const createProject = ({ name, emoji, instructions }) => {
+    const p = { id: makeSid(), name, emoji, instructions };
+    const updated = [...projects, p];
+    setProjects(updated);
+    sto.set("aura_projects", updated);
+    setActiveProjectId(p.id);
+    newChat();
+  };
+
+  const deleteProject = (id) => {
+    const updated = projects.filter(p => p.id !== id);
+    setProjects(updated);
+    sto.set("aura_projects", updated);
+    if (activeProjectId === id) setActiveProjectId(null);
+  };
+
+  const renameSession = (id, title) => {
+    setSessions(prev => {
+      const u = prev.map(s => s.id === id ? { ...s, title } : s);
+      sto.set("aura_sessions", u);
+      return u;
+    });
+  };
 
   const switchMode = (mode) => {
     setChatMode(mode.id);
@@ -106,6 +195,9 @@ export default function AuraOS() {
     setAgentMode(agent);
     setView("chat");
     setSidebarOpen(false);
+    // Track recently used agents (last 6, no duplicates)
+    const recent = sto.get("recent_agents", []).filter(a => a.id !== agent.id);
+    sto.set("recent_agents", [agent, ...recent].slice(0, 6));
   };
 
   const selectSession = (id) => {
@@ -115,8 +207,7 @@ export default function AuraOS() {
     setSidebarOpen(false);
   };
 
-  const deleteSession = (e, id) => {
-    e.stopPropagation();
+  const deleteSession = (id) => {
     sto.remove("msgs_" + id);
     setSessions(prev => {
       const u = prev.filter(s => s.id !== id);
@@ -138,7 +229,7 @@ export default function AuraOS() {
     });
   };
 
-  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : view === "agents" ? "AI Agents" : (sessions.find(s => s.id === activeSid)?.title || auraName);
+  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : view === "agents" ? "AI Agents" : view === "design" ? "Design Brain" : view === "automate" ? "Automate" : view === "navigate" ? "Navigate" : view === "translate" ? "Translate" : view === "code" ? "Code Workspace" : (sessions.find(s => s.id === activeSid)?.title || auraName);
 
   if (!session) return (
     <>
@@ -147,173 +238,65 @@ export default function AuraOS() {
     </>
   );
 
+  if (!onboarded) return (
+    <>
+      <style>{CSS}</style>
+      <OnboardingScreen onComplete={({ aiName }) => { setAuraName(aiName); setOnboarded(true); }} />
+    </>
+  );
+
   if (minimized) return (
     <>
       <style>{CSS}</style>
-      <div
-        onClick={() => setMinimized(false)}
-        style={{ position: "fixed", bottom: 28, right: 20, width: 62, height: 62, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 9999, fontSize: 28, boxShadow: `0 6px 28px ${C.cyan}66`, animation: "pulse 3s ease-in-out infinite" }}
-      >◈</div>
+      <div onClick={() => setMinimized(false)} style={{ position: "fixed", bottom: 28, right: 20, width: 62, height: 62, background: `linear-gradient(135deg,${C.cyan},${C.purple})`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 9999, fontSize: 28, boxShadow: `0 6px 28px ${C.cyan}66`, animation: "pulse 3s ease-in-out infinite" }}>◈</div>
     </>
   );
 
   return (
-    <div style={{ height: "100dvh", minHeight: "-webkit-fill-available", background: C.bg, fontFamily: "'DM Mono',monospace", color: "#fff", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100dvh", minHeight: "-webkit-fill-available", background: theme.bg, fontFamily: "'DM Mono',monospace", color: theme.text, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
       <style>{CSS}</style>
 
-      {/* Background grid */}
-      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: `linear-gradient(${C.cyan}03 1px,transparent 1px),linear-gradient(90deg,${C.cyan}03 1px,transparent 1px)`, backgroundSize: "44px 44px", zIndex: 0 }} />
+      {darkMode && <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: `linear-gradient(${C.cyan}03 1px,transparent 1px),linear-gradient(90deg,${C.cyan}03 1px,transparent 1px)`, backgroundSize: "44px 44px", zIndex: 0 }} />}
 
-      {/* Sidebar backdrop */}
-      {sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.62)", zIndex: 40, backdropFilter: "blur(3px)" }} />
-      )}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 40, backdropFilter: "blur(4px)" }} />}
 
-      {/* ── SIDEBAR ── */}
-      <div style={{
-        position: "fixed", top: 0, bottom: 0,
-        left: sidebarOpen ? 0 : -272,
-        width: 272, zIndex: 50,
-        background: "#04040e",
-        borderRight: `1px solid ${C.border}`,
-        display: "flex", flexDirection: "column",
-        transition: "left 0.26s cubic-bezier(.4,0,.2,1)",
-      }}>
-
-        {/* Sidebar header */}
-        <div style={{ padding: "18px 14px 14px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{ position: "relative", width: 30, height: 30 }}>
-              <div style={{ position: "absolute", inset: 0, border: `1.5px solid ${C.cyan}66`, borderRadius: "50%", animation: "rotate 8s linear infinite" }} />
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: C.cyan }}>◈</div>
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 13, fontWeight: 900, color: C.cyan, letterSpacing: 2 }}>{auraName}</div>
-              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.18)", marginTop: 1 }}>AI OS · LIVE</div>
-            </div>
-            {session?.name && (
-              <div onClick={() => setShowProfile(true)} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7, cursor: "pointer", padding: "4px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, transition: "background 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
-                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-              >
-                <div style={{ width: 22, height: 22, borderRadius: "50%", background: `linear-gradient(135deg,${C.cyan},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: "#000", flexShrink: 0 }}>
-                  {session.name[0].toUpperCase()}
-                </div>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", maxWidth: 60, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.name.split(" ")[0]}</span>
-              </div>
-            )}
-          </div>
-
-          {/* New Chat */}
-          <button onClick={newChat} style={{ width: "100%", background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", fontSize: 12, color: C.cyan, fontFamily: "'DM Mono',monospace", fontWeight: 700, display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = `${C.cyan}1a`}
-            onMouseLeave={e => e.currentTarget.style.background = `${C.cyan}10`}
-          >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> New Chat
-          </button>
-        </div>
-
-        {/* AURA Modes */}
-        <div style={{ padding: "10px 8px 6px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", letterSpacing: 2, padding: "0 8px 8px", textTransform: "uppercase" }}>Modes</div>
-          {MODES.map(mode => {
-            const active = chatMode === mode.id && !agentMode && view === "chat";
-            return (
-              <button key={mode.id} onClick={() => switchMode(mode)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 10, cursor: "pointer", background: active ? `${mode.color}18` : "transparent", border: `1px solid ${active ? mode.color + "33" : "transparent"}`, marginBottom: 2, fontFamily: "'DM Mono',monospace", transition: "all 0.15s", textAlign: "left" }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
-              >
-                <span style={{ fontSize: 17, flexShrink: 0 }}>{mode.icon}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: active ? mode.color : "rgba(255,255,255,0.8)", fontWeight: active ? 700 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mode.name}</div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>{mode.label}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Sessions list */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px" }}>
-          {sessions.length > 0 && (
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", letterSpacing: 2, padding: "0 8px 8px", textTransform: "uppercase" }}>Recent</div>
-          )}
-          {sessions.map(s => {
-            const isActive = s.id === activeSid && view === "chat";
-            return (
-              <div key={s.id} onClick={() => selectSession(s.id)}
-                style={{ padding: "9px 10px", borderRadius: 10, cursor: "pointer", marginBottom: 2, position: "relative", display: "flex", alignItems: "center", gap: 6, background: isActive ? `${C.cyan}0e` : "transparent", border: `1px solid ${isActive ? C.cyan + "25" : "transparent"}`, transition: "all 0.15s", group: true }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.querySelector(".del-btn").style.opacity = "1"; }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; e.currentTarget.querySelector(".del-btn").style.opacity = "0"; }}
-              >
-                <span style={{ fontSize: 12, flexShrink: 0, opacity: 0.4 }}>💬</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: isActive ? C.cyan : "rgba(255,255,255,0.72)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
-                  {s.preview && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.22)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{s.preview}</div>}
-                </div>
-                <button className="del-btn" onClick={e => deleteSession(e, s.id)}
-                  style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", cursor: "pointer", fontSize: 13, padding: "0 2px", flexShrink: 0, opacity: 0, transition: "opacity 0.15s" }}
-                >✕</button>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Sidebar footer */}
-        <div style={{ padding: "10px 8px 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-          {[
-            { id: "agents",   icon: "🤖", label: "Agents",   color: C.cyan },
-            { id: "settings", icon: "⚙", label: "Settings", color: "rgba(255,255,255,0.7)" },
-            { id: "admin",    icon: "🔐", label: "Admin",    color: C.red },
-          ].map(item => (
-            <button key={item.id}
-              onClick={() => { setView(item.id); setSidebarOpen(false); }}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 10px", borderRadius: 10, cursor: "pointer", background: view === item.id ? "rgba(255,255,255,0.08)" : "transparent", marginBottom: 2, border: "none", fontFamily: "'DM Mono',monospace", transition: "background 0.15s" }}
-              onMouseEnter={e => { if (view !== item.id) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-              onMouseLeave={e => { if (view !== item.id) e.currentTarget.style.background = "transparent"; }}
-            >
-              <span style={{ fontSize: 15 }}>{item.icon}</span>
-              <span style={{ fontSize: 13, color: item.color, fontWeight: 600 }}>{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <Sidebar
+        auraName={auraName} session={session} sidebarOpen={sidebarOpen} theme={theme}
+        view={view} chatMode={chatMode} agentMode={agentMode} activeSid={activeSid}
+        sessions={sessions} projects={projects} activeProjectId={activeProjectId}
+        darkMode={darkMode} modes={MODES}
+        onClose={() => setSidebarOpen(false)}
+        onNewChat={newChat}
+        onSwitchMode={switchMode}
+        onSelectSession={selectSession}
+        onDeleteSession={deleteSession}
+        onRenameSession={renameSession}
+        onShowProfile={() => setShowProfile(true)}
+        onSetView={setView}
+        onToggleDark={toggleDark}
+        onProjectSelect={setActiveProjectId}
+        onProjectCreate={createProject}
+        onProjectDelete={deleteProject}
+      />
 
       {/* ── MAIN CONTENT ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, position: "relative", zIndex: 1 }}>
 
         {/* Top bar */}
-        <div style={{ padding: "9px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 9, flexShrink: 0, background: `${C.bg}f2`, backdropFilter: "blur(20px)", zIndex: 10, position: "relative" }}>
-
-          {/* ≡ menu OR ← back button */}
+        <div style={{ padding: "8px 12px", borderBottom: `1px solid ${theme.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, background: theme.topbar, backdropFilter: "blur(20px)", zIndex: 10 }}>
           {(() => {
-            const isBack = view !== "chat" || agentMode;
+            const isBack = view !== "chat" || !!agentMode;
             return (
-              <button
-                onClick={() => {
-                  if (view !== "chat") { goBack(); }
-                  else if (agentMode) { setView("agents"); }
-                  else { setSidebarOpen(s => !s); }
-                }}
-                style={{ background: isBack ? `${C.cyan}10` : `${C.cyan}18`, border: `1px solid ${C.cyan}44`, borderRadius: 9, padding: "7px 12px", cursor: "pointer", color: C.cyan, fontSize: isBack ? 20 : 22, lineHeight: 1, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", minWidth: 44, flexShrink: 0 }}
-              >
-                {isBack ? "←" : "≡"}
-              </button>
+              <button onClick={() => { if (view !== "chat") goBack(); else if (agentMode) setView("agents"); else setSidebarOpen(s => !s); }}
+                style={{ background: `${C.cyan}14`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "6px 11px", cursor: "pointer", color: C.cyan, fontSize: isBack ? 19 : 20, lineHeight: 1, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.12s", minWidth: 40, flexShrink: 0 }}
+              >{isBack ? "←" : "≡"}</button>
             );
           })()}
-
-          <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {activeTitle}
-          </div>
-
-          <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
-            {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </div>
-
-          <button onClick={() => setMinimized(true)} title="Minimize"
-            style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 9, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "rgba(255,255,255,0.25)", lineHeight: 1 }}
-          >—</button>
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeTitle}</div>
+          <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: theme.textFaint }}>{time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+          <button onClick={() => { setSearchOpen(s => !s); setSearchQ(""); }} style={{ background: theme.hover, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: theme.textFaint, lineHeight: 1 }} title="Search (Ctrl+K)">🔍</button>
+          {installPrompt && <button onClick={triggerInstall} style={{ background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 10, color: C.cyan, fontFamily: "'DM Mono',monospace", lineHeight: 1, whiteSpace: "nowrap" }}>⬇ Install</button>}
+          <button onClick={() => setMinimized(true)} style={{ background: theme.hover, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: theme.textFaint, lineHeight: 1 }}>—</button>
         </div>
 
         {/* Screen content */}
@@ -327,6 +310,7 @@ export default function AuraOS() {
               onSessionUpdate={updateSession}
               agentMode={agentMode}
               modePrompt={agentMode ? "" : (MODES.find(m => m.id === chatMode)?.prompt || "")}
+              projectPrompt={activeProject?.instructions || ""}
             />
           )}
           {view === "settings" && (
@@ -335,6 +319,8 @@ export default function AuraOS() {
               onNameChange={handleName}
               session={session}
               onLogout={handleLogout}
+              canInstall={!!installPrompt}
+              onInstall={triggerInstall}
             />
           )}
           {view === "admin" && (
@@ -345,8 +331,68 @@ export default function AuraOS() {
           {view === "agents" && (
             <AgentsScreen onLaunch={launchAgent} />
           )}
+          {view === "design" && (
+            <DesignScreen auraName={auraName} />
+          )}
+          {view === "automate" && (
+            <AutomateScreen auraName={auraName} />
+          )}
+          {view === "navigate" && (
+            <NavigateScreen auraName={auraName} />
+          )}
+          {view === "translate" && (
+            <TranslateScreen />
+          )}
+          {view === "code" && (
+            <CodeScreen auraName={auraName} />
+          )}
         </div>
       </div>
+
+      {/* ── SEARCH OVERLAY ── */}
+      {searchOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "12vh" }}
+          onClick={e => { if (e.target === e.currentTarget) setSearchOpen(false); }}>
+          <div style={{ width: "min(560px, 92vw)", background: "#0d0d0d", borderRadius: 18, border: `1px solid ${C.cyan}33`, overflow: "hidden", boxShadow: `0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px ${C.cyan}11` }}>
+            {/* Input */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: `1px solid rgba(255,255,255,0.06)` }}>
+              <span style={{ fontSize: 16, color: "rgba(255,255,255,0.3)" }}>🔍</span>
+              <input autoFocus value={searchQ} onChange={e => setSearchQ(e.target.value)}
+                placeholder="Search conversations… (Ctrl+K)"
+                style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 14, fontFamily: "'DM Mono',monospace", outline: "none" }} />
+              <kbd style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, padding: "2px 6px" }}>ESC</kbd>
+            </div>
+
+            {/* Results */}
+            <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
+              {searchQ.trim().length < 2 ? (
+                <div style={{ padding: "20px 16px", fontSize: 12, color: "rgba(255,255,255,0.2)", textAlign: "center" }}>
+                  Type to search across all your conversations
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div style={{ padding: "20px 16px", fontSize: 12, color: "rgba(255,255,255,0.2)", textAlign: "center" }}>No results for "{searchQ}"</div>
+              ) : searchResults.map((r, i) => (
+                <div key={i} onClick={() => { selectSession(r.sid); setSearchOpen(false); setSearchQ(""); }}
+                  style={{ padding: "11px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", transition: "background 0.12s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: r.role === "user" ? C.purple : C.cyan }}>{r.role === "user" ? "You" : auraName}</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>in {r.title}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
+                    {r.snippet.split(new RegExp(`(${searchQ})`, "gi")).map((part, j) =>
+                      part.toLowerCase() === searchQ.toLowerCase()
+                        ? <mark key={j} style={{ background: `${C.cyan}44`, color: "#fff", borderRadius: 2, padding: "0 1px" }}>{part}</mark>
+                        : part
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PROFILE POPUP ── */}
       <Modal open={showProfile} onClose={() => setShowProfile(false)} color={C.cyan} title="Your Profile">
