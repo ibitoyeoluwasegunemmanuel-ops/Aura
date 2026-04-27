@@ -45,6 +45,20 @@ export async function callClaudeStream(messages, system = "", onChunk) {
   }
 }
 
+export async function webSearch(query) {
+  try {
+    const res = await fetch("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const data = await res.json();
+    return data;
+  } catch {
+    return { results: [], abstract: "", answer: "" };
+  }
+}
+
 export const genImg = (prompt, seed = Date.now()) =>
   `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1024&height=1024&nologo=true&enhance=true&seed=${seed}`;
 

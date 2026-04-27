@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { C } from "../theme/colors";
-import { callClaudeStream, genImgEnhanced } from "../utils/api";
+import { callClaudeStream, genImgEnhanced, webSearch } from "../utils/api";
 import { speakFull } from "../utils/voice";
 import { sto } from "../utils/storage";
 import { FOUNDER_SYSTEM_BLOCK } from "../data/founder";
@@ -187,6 +187,7 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const [showPlus, setShowPlus]       = useState(false);
   const [attachment, setAttachment]   = useState(null);
   const [thinkMode, setThinkMode]     = useState(false);
+  const [searchMode, setSearchMode]   = useState(false);
   const [artifact, setArtifact]       = useState(null); // { type: "html"|"mermaid", code, title }
   const [artifactTab, setArtifactTab] = useState("preview"); // "preview" | "code"
 
@@ -410,7 +411,7 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
     if (id === "photos")   { fileInputRef.current?.click(); return; }
     if (id === "files")    { fileInputRef.current?.click(); return; }
     if (id === "image")    { setInput("Generate an image of "); textareaRef.current?.focus(); return; }
-    if (id === "search")   { setInput("Search and tell me about: "); textareaRef.current?.focus(); return; }
+    if (id === "search")   { setSearchMode(s => !s); textareaRef.current?.focus(); return; }
     if (id === "think")    { setThinkMode(t => !t); return; }
     if (id === "research") { setInput("Research in depth: "); textareaRef.current?.focus(); return; }
   };
@@ -446,7 +447,20 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
       return { role: msg.role, content: msg.content };
     });
 
-    const sys = thinkMode ? SYSTEM + "\n\nTHINKING MODE: Reason step by step carefully before responding." : SYSTEM;
+    let searchContext = "";
+    if (searchMode) {
+      setSearchMode(false);
+      const sr = await webSearch(t);
+      if (sr.answer) searchContext += `\nDirect answer: ${sr.answer}`;
+      if (sr.abstract) searchContext += `\nSummary: ${sr.abstract}`;
+      if (sr.results?.length) {
+        searchContext += "\nSearch results:\n" + sr.results.map((r, i) => `${i + 1}. ${r.snippet}${r.url ? ` (${r.url})` : ""}`).join("\n");
+      }
+      searchContext = searchContext.trim();
+    }
+
+    const sysBase = thinkMode ? SYSTEM + "\n\nTHINKING MODE: Reason step by step carefully before responding." : SYSTEM;
+    const sys = searchContext ? sysBase + `\n\nWEB SEARCH RESULTS for "${t}":\n${searchContext}\n\nUse these results to answer accurately. Cite sources when useful.` : sysBase;
     let full = "";
     try {
       await callClaudeStream(apiMsgs, sys, (chunk) => {
@@ -575,10 +589,11 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
                 <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, position: "relative" }}>
                   {showPlus ? "×" : "+"}
                   {thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.gold }} />}
+                  {searchMode && !thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.cyan }} />}
                 </button>
                 <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  placeholder={voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
+                  placeholder={searchMode ? "What do you want to search?" : voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
                   rows={1}
                   style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 14, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
                 <button onClick={voiceMode ? deactivateVoiceMode : startDictation}
@@ -657,7 +672,7 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 6px", cursor: "pointer", borderRadius: 12 }}
                   onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: opt.id === "think" && thinkMode ? `${C.gold}22` : "rgba(255,255,255,0.07)", border: `1px solid ${opt.id === "think" && thinkMode ? C.gold + "55" : "rgba(255,255,255,0.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{opt.icon}</div>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: (opt.id === "think" && thinkMode) ? `${C.gold}22` : (opt.id === "search" && searchMode) ? `${C.cyan}22` : "rgba(255,255,255,0.07)", border: `1px solid ${(opt.id === "think" && thinkMode) ? C.gold + "55" : (opt.id === "search" && searchMode) ? C.cyan + "55" : "rgba(255,255,255,0.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{opt.icon}</div>
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>{opt.label}</div>
                 </div>
               ))}
@@ -681,10 +696,11 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
             <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, position: "relative" }}>
               {showPlus ? "×" : "+"}
               {thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.gold }} />}
+              {searchMode && !thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.cyan }} />}
             </button>
             <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
+              placeholder={searchMode ? "What do you want to search?" : voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
               rows={1}
               style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
             <button onClick={voiceMode ? deactivateVoiceMode : startDictation}
