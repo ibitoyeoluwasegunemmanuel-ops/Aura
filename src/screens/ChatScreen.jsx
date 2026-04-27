@@ -26,6 +26,7 @@ const QUICK = [
 ];
 
 function ArtifactPanel({ artifact, tab, setTab, onClose }) {
+  const isMobile = window.innerWidth < 768;
   if (!artifact) return null;
   const download = () => {
     const blob = new Blob([artifact.code], { type: "text/html" });
@@ -36,8 +37,13 @@ function ArtifactPanel({ artifact, tab, setTab, onClose }) {
     URL.revokeObjectURL(a.href);
   };
   const copy = () => navigator.clipboard?.writeText(artifact.code);
+
+  const panelStyle = isMobile
+    ? { position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", background: "#07070f" }
+    : { width: "50%", minWidth: 0, display: "flex", flexDirection: "column", borderLeft: `1px solid ${C.purple}44`, background: "#07070f", flexShrink: 0 };
+
   return (
-    <div style={{ width: "50%", minWidth: 0, display: "flex", flexDirection: "column", borderLeft: `1px solid ${C.purple}44`, background: "#07070f", flexShrink: 0 }}>
+    <div style={panelStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: `1px solid ${C.purple}22`, flexShrink: 0, background: `${C.purple}08` }}>
         <span style={{ fontSize: 11, color: C.purple, fontWeight: 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>💻 {artifact.title || "Live Preview"}</span>
         <button onClick={() => setTab("preview")} style={{ background: tab === "preview" ? `${C.purple}22` : "transparent", border: `1px solid ${tab === "preview" ? C.purple + "55" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 10, color: tab === "preview" ? C.purple : "rgba(255,255,255,0.4)", fontFamily: "'DM Mono',monospace" }}>Preview</button>
@@ -410,6 +416,21 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
   }, [auraName]);
 
   useEffect(() => { startWake(); return () => wakeRef.current?.stop(); }, [startWake]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e) => {
+      // Escape → close artifact panel or plus menu
+      if (e.key === "Escape") { setArtifact(null); setShowPlus(false); setEditingIdx(null); }
+      // Ctrl/Cmd + / → toggle think mode
+      if ((e.ctrlKey || e.metaKey) && e.key === "/") { e.preventDefault(); setThinkMode(t => !t); }
+      // Ctrl/Cmd + Shift + S → export chat
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "S") { e.preventDefault(); if (msgs.length) exportChat(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgs]);
 
   const startVoiceLoop = useCallback(() => {
     if (!voiceModeRef.current) return;
