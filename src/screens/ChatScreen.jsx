@@ -24,44 +24,53 @@ const QUICK = [
   "Translate 'good morning' to Yoruba",
 ];
 
-function HtmlPreview({ code }) {
-  const [showCode, setShowCode] = useState(false);
+function ArtifactPanel({ artifact, tab, setTab, onClose }) {
+  if (!artifact) return null;
   const download = () => {
-    const blob = new Blob([code], { type: "text/html" });
+    const blob = new Blob([artifact.code], { type: "text/html" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "aura-design.html";
     a.click();
     URL.revokeObjectURL(a.href);
   };
-  const copy = () => navigator.clipboard?.writeText(code);
+  const copy = () => navigator.clipboard?.writeText(artifact.code);
   return (
-    <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${C.purple}55`, margin: "8px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", background: `${C.purple}12`, borderBottom: `1px solid ${C.purple}22` }}>
-        <span style={{ fontSize: 11, color: C.purple, fontWeight: 700, flex: 1 }}>💻 Live Preview</span>
-        <button onClick={() => setShowCode(s => !s)} style={{ background: showCode ? `${C.purple}22` : "rgba(255,255,255,0.06)", border: `1px solid ${C.purple}33`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: C.purple, fontFamily: "'DM Mono',monospace" }}>
-          {showCode ? "Preview" : "Code"}
-        </button>
-        <button onClick={copy} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.45)", fontFamily: "'DM Mono',monospace" }}>Copy</button>
-        <button onClick={download} style={{ background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: C.cyan, fontFamily: "'DM Mono',monospace" }}>⬇ Save</button>
+    <div style={{ width: "50%", minWidth: 0, display: "flex", flexDirection: "column", borderLeft: `1px solid ${C.purple}44`, background: "#07070f", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: `1px solid ${C.purple}22`, flexShrink: 0, background: `${C.purple}08` }}>
+        <span style={{ fontSize: 11, color: C.purple, fontWeight: 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>💻 {artifact.title || "Live Preview"}</span>
+        <button onClick={() => setTab("preview")} style={{ background: tab === "preview" ? `${C.purple}22` : "transparent", border: `1px solid ${tab === "preview" ? C.purple + "55" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 10, color: tab === "preview" ? C.purple : "rgba(255,255,255,0.4)", fontFamily: "'DM Mono',monospace" }}>Preview</button>
+        <button onClick={() => setTab("code")} style={{ background: tab === "code" ? "rgba(255,255,255,0.08)" : "transparent", border: `1px solid ${tab === "code" ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 10, color: tab === "code" ? "#fff" : "rgba(255,255,255,0.4)", fontFamily: "'DM Mono',monospace" }}>Code</button>
+        <button onClick={copy} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Mono',monospace" }}>Copy</button>
+        <button onClick={download} style={{ background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 10, color: C.cyan, fontFamily: "'DM Mono',monospace" }}>⬇</button>
+        <button onClick={onClose} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 16, padding: "0 2px", lineHeight: 1 }}>✕</button>
       </div>
-      {showCode ? (
-        <pre style={{ background: "rgba(0,0,0,0.5)", padding: "12px 14px", overflowX: "auto", margin: 0, maxHeight: 320 }}>
-          <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#a8ff78", whiteSpace: "pre" }}>{code}</code>
-        </pre>
-      ) : (
-        <iframe
-          srcDoc={code}
-          title="AURA Design Preview"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          style={{ width: "100%", height: 460, border: "none", background: "#fff", display: "block" }}
-        />
-      )}
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        {tab === "preview" ? (
+          <iframe srcDoc={artifact.code} title="preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style={{ width: "100%", height: "100%", border: "none", display: "block", background: "#fff" }} />
+        ) : (
+          <pre style={{ margin: 0, padding: "14px", overflowY: "auto", height: "100%", boxSizing: "border-box", background: "transparent" }}>
+            <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#a8ff78", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{artifact.code}</code>
+          </pre>
+        )}
+      </div>
     </div>
   );
 }
 
-function Markdown({ text }) {
+function HtmlInlineCard({ code, onExpand }) {
+  return (
+    <div style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${C.purple}44`, margin: "8px 0", cursor: "pointer" }} onClick={onExpand}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: `${C.purple}10` }}>
+        <span style={{ fontSize: 11, color: C.purple, fontWeight: 700, flex: 1 }}>💻 Live Preview — tap to open</span>
+        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>⤢ Expand</span>
+      </div>
+      <iframe srcDoc={code} title="preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style={{ width: "100%", height: 200, border: "none", display: "block", background: "#fff", pointerEvents: "none" }} />
+    </div>
+  );
+}
+
+function Markdown({ text, onArtifact }) {
   const lines = text.split("\n");
   const els = [];
   let i = 0;
@@ -74,7 +83,7 @@ function Markdown({ text }) {
       while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }
       const codeStr = code.join("\n");
       if (lang === "html") {
-        els.push(<HtmlPreview key={i} code={codeStr} />);
+        els.push(<HtmlInlineCard key={i} code={codeStr} onExpand={onArtifact ? () => onArtifact({ type: "html", code: codeStr, title: "Live Preview" }) : undefined} />);
       } else if (lang === "mermaid") {
         const mermaidHtml = `<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"><\/script><style>body{background:#0d0d0d;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;box-sizing:border-box}.mermaid{max-width:100%}</style></head><body><div class="mermaid">${codeStr}</div><script>mermaid.initialize({startOnLoad:true,theme:'dark'})<\/script></body></html>`;
         els.push(
@@ -178,6 +187,8 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const [showPlus, setShowPlus]       = useState(false);
   const [attachment, setAttachment]   = useState(null);
   const [thinkMode, setThinkMode]     = useState(false);
+  const [artifact, setArtifact]       = useState(null); // { type: "html"|"mermaid", code, title }
+  const [artifactTab, setArtifactTab] = useState("preview"); // "preview" | "code"
 
   const endRef       = useRef();
   const wakeRef      = useRef();
@@ -471,7 +482,10 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
   const stateColor  = voiceState === "listening" ? C.green : voiceState === "speaking" ? C.cyan : C.gold;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative" }}>
+    <div style={{ display: "flex", flexDirection: "row", height: "100%", minHeight: 0, position: "relative" }}>
+    {/* ── ARTIFACT PANEL ── */}
+    <ArtifactPanel artifact={artifact} tab={artifactTab} setTab={setArtifactTab} onClose={() => setArtifact(null)} />
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
 
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.txt,.doc,.docx" style={{ display: "none" }} onChange={e => handleFile(e.target.files?.[0])} />
@@ -581,7 +595,7 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
                     <>
                       {m.imagePreview && <div style={{ marginBottom: 8, borderRadius: 12, overflow: "hidden", maxWidth: 200 }}><img src={m.imagePreview} alt="attachment" style={{ width: "100%", display: "block" }} /></div>}
                       <div style={{ padding: m.role === "user" ? "10px 15px" : "0", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : 0, background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent", border: m.role === "user" ? `1px solid ${C.purple}44` : "none", fontSize: 13.5, color: "rgba(255,255,255,0.9)", fontFamily: "'Inter','DM Mono',sans-serif" }}>
-                        {m.role === "user" ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span> : <Markdown text={m.content} />}
+                        {m.role === "user" ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span> : <Markdown text={m.content} onArtifact={(a) => { setArtifact(a); setArtifactTab("preview"); }} />}
                         {m.streaming && <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />}
                       </div>
                       {m.role === "assistant" && !m.streaming && m.content && (
@@ -678,6 +692,7 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
         </div>
       </div>}
 
+    </div>
     </div>
   );
 }
