@@ -91,6 +91,31 @@ function Markdown({ text }) {
     } else if (/^\d+[.)]\s/.test(line)) {
       const num = line.match(/^(\d+)[.)]/)[1];
       els.push(<div key={i} style={{ display: "flex", gap: 8, marginBottom: 3 }}><span style={{ color: C.cyan, flexShrink: 0, minWidth: 16, fontWeight: 700 }}>{num}.</span><span>{renderInline(line.replace(/^\d+[.)]\s*/, ""))}</span></div>);
+    } else if (/^\|/.test(line) && line.includes("|")) {
+      const tableLines = [line];
+      while (i + 1 < lines.length && /^\|/.test(lines[i + 1])) { i++; tableLines.push(lines[i]); }
+      const rows = tableLines.filter(r => !/^\|[-| :]+\|$/.test(r.trim()));
+      const isHeader = tableLines.length > 1 && /^\|[-| :]+\|$/.test(tableLines[1].trim());
+      els.push(
+        <div key={i} style={{ overflowX: "auto", margin: "8px 0" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+            <tbody>
+              {rows.map((row, ri) => {
+                const cells = row.split("|").filter((_, ci) => ci > 0 && ci < row.split("|").length - 1);
+                const isHead = isHeader && ri === 0;
+                return (
+                  <tr key={ri} style={{ borderBottom: `1px solid rgba(255,255,255,0.07)`, background: ri % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                    {cells.map((cell, ci) => isHead
+                      ? <th key={ci} style={{ padding: "8px 12px", color: C.cyan, fontWeight: 700, textAlign: "left", borderBottom: `1px solid ${C.cyan}33`, whiteSpace: "nowrap" }}>{renderInline(cell.trim())}</th>
+                      : <td key={ci} style={{ padding: "7px 12px", color: "rgba(255,255,255,0.8)", textAlign: "left", whiteSpace: "nowrap" }}>{renderInline(cell.trim())}</td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
     } else if (line.trim() === "") {
       els.push(<div key={i} style={{ height: 6 }} />);
     } else {
