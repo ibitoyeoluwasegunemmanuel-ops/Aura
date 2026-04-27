@@ -5,7 +5,7 @@ import { speakFull } from "../utils/voice";
 import { sto } from "../utils/storage";
 import { FOUNDER_SYSTEM_BLOCK } from "../data/founder";
 
-const CMD_RE = /\[(IMAGE|PREVIEW|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
+const CMD_RE = /\[(IMAGE|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
 
 const PLUS_OPTIONS = [
   { id: "camera",   icon: "📷", label: "Camera"       },
@@ -24,6 +24,43 @@ const QUICK = [
   "Translate 'good morning' to Yoruba",
 ];
 
+function HtmlPreview({ code }) {
+  const [showCode, setShowCode] = useState(false);
+  const download = () => {
+    const blob = new Blob([code], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "aura-design.html";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const copy = () => navigator.clipboard?.writeText(code);
+  return (
+    <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${C.purple}55`, margin: "8px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", background: `${C.purple}12`, borderBottom: `1px solid ${C.purple}22` }}>
+        <span style={{ fontSize: 11, color: C.purple, fontWeight: 700, flex: 1 }}>💻 Live Preview</span>
+        <button onClick={() => setShowCode(s => !s)} style={{ background: showCode ? `${C.purple}22` : "rgba(255,255,255,0.06)", border: `1px solid ${C.purple}33`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: C.purple, fontFamily: "'DM Mono',monospace" }}>
+          {showCode ? "Preview" : "Code"}
+        </button>
+        <button onClick={copy} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.45)", fontFamily: "'DM Mono',monospace" }}>Copy</button>
+        <button onClick={download} style={{ background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: C.cyan, fontFamily: "'DM Mono',monospace" }}>⬇ Save</button>
+      </div>
+      {showCode ? (
+        <pre style={{ background: "rgba(0,0,0,0.5)", padding: "12px 14px", overflowX: "auto", margin: 0, maxHeight: 320 }}>
+          <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#a8ff78", whiteSpace: "pre" }}>{code}</code>
+        </pre>
+      ) : (
+        <iframe
+          srcDoc={code}
+          title="AURA Design Preview"
+          sandbox="allow-scripts"
+          style={{ width: "100%", height: 460, border: "none", background: "#fff", display: "block" }}
+        />
+      )}
+    </div>
+  );
+}
+
 function Markdown({ text }) {
   const lines = text.split("\n");
   const els = [];
@@ -31,16 +68,21 @@ function Markdown({ text }) {
   while (i < lines.length) {
     const line = lines[i];
     if (/^```/.test(line)) {
-      const lang = line.slice(3).trim();
+      const lang = line.slice(3).trim().toLowerCase();
       const code = [];
       i++;
       while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }
-      els.push(
-        <pre key={i} style={{ background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px", overflowX: "auto", margin: "6px 0" }}>
-          {lang && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginBottom: 6, letterSpacing: 2 }}>{lang.toUpperCase()}</div>}
-          <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#a8ff78", whiteSpace: "pre" }}>{code.join("\n")}</code>
-        </pre>
-      );
+      const codeStr = code.join("\n");
+      if (lang === "html") {
+        els.push(<HtmlPreview key={i} code={codeStr} />);
+      } else {
+        els.push(
+          <pre key={i} style={{ background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px", overflowX: "auto", margin: "6px 0" }}>
+            {lang && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginBottom: 6, letterSpacing: 2 }}>{lang.toUpperCase()}</div>}
+            <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#a8ff78", whiteSpace: "pre" }}>{codeStr}</code>
+          </pre>
+        );
+      }
     } else if (/^#{1,3} /.test(line)) {
       const lvl = line.match(/^(#{1,3}) /)[1].length;
       els.push(<div key={i} style={{ fontWeight: 700, fontSize: lvl === 1 ? 16 : lvl === 2 ? 14 : 13, color: "#fff", margin: "10px 0 4px" }}>{line.replace(/^#{1,3} /, "")}</div>);
@@ -120,9 +162,10 @@ Response style: Be direct and expert. Sound natural and confident. Use emojis na
 
 Special commands (emit on own line when relevant):
 [IMAGE: description] — generate image
-[PREVIEW: description] — build UI/website
 [LOCATION] — get GPS
-[OPEN: url] — open website`
+[OPEN: url] — open website
+
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, landing page, or UI — write a complete, self-contained HTML file with embedded CSS and JS inside a \`\`\`html code block. Make it look world-class — dark theme, modern fonts (use Google Fonts via CDN), gradients, animations. No placeholders. Fully functional. This renders live in a preview iframe.`
     : `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
 ${modePrompt ? `\n${modePrompt}` : ""}
@@ -132,9 +175,10 @@ Response style: Be direct. Say "Here's what you need:" not "Here is the answer..
 
 Special commands (emit on own line when relevant):
 [IMAGE: description] — generate image
-[PREVIEW: description] — build UI/website
 [LOCATION] — get GPS
-[OPEN: url] — open website`;
+[OPEN: url] — open website
+
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, landing page, or UI — write a complete, self-contained HTML file with embedded CSS and JS inside a \`\`\`html code block. Make it look world-class — dark theme, modern fonts (use Google Fonts via CDN), gradients, smooth animations. No placeholders. Fully functional. This renders live in a preview iframe inside AURA.`;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -347,10 +391,6 @@ Special commands (emit on own line when relevant):
         const desc = full.match(/\[IMAGE:\s*(.+?)\]/)?.[1] || t;
         const imageUrl = await genImgEnhanced(desc);
         extra.push({ role: "assistant", type: "image", imageUrl, caption: desc });
-      } else if (full.includes("[PREVIEW:")) {
-        const desc = full.match(/\[PREVIEW:\s*(.+?)\]/)?.[1] || t;
-        const imageUrl = await genImgEnhanced(`app/website UI design mockup: ${desc}`);
-        extra.push({ role: "assistant", type: "preview", imageUrl, caption: desc });
       } else if (full.includes("[LOCATION]")) {
         navigator.geolocation?.getCurrentPosition(
           p => setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `📍 ${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`, streaming: false } : x)),
@@ -502,11 +542,11 @@ Special commands (emit on own line when relevant):
                       )}
                     </>
                   )}
-                  {(m.type === "image" || m.type === "preview") && (
-                    <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${m.type === "preview" ? C.purple + "44" : C.cyan + "33"}` }}>
-                      <div style={{ padding: "6px 12px", fontSize: 10, color: m.type === "preview" ? C.purple : C.cyan, background: m.type === "preview" ? `${C.purple}10` : `${C.cyan}08`, display: "flex" }}>
-                        {m.type === "preview" ? "💻 Preview" : "🎨 Image"}
-                        <a href={m.imageUrl} target="_blank" rel="noreferrer" style={{ marginLeft: "auto", color: C.cyan, textDecoration: "none" }}>⬇ Save</a>
+                  {m.type === "image" && (
+                    <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${C.cyan}33` }}>
+                      <div style={{ padding: "6px 12px", fontSize: 10, color: C.cyan, background: `${C.cyan}08`, display: "flex", alignItems: "center" }}>
+                        <span style={{ flex: 1 }}>🎨 Image</span>
+                        <button onClick={() => { const a = document.createElement("a"); a.href = m.imageUrl; a.download = "aura-image.png"; a.target = "_blank"; a.click(); }} style={{ background: `${C.cyan}15`, border: `1px solid ${C.cyan}33`, borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 10, color: C.cyan, fontFamily: "'DM Mono',monospace" }}>⬇ Save</button>
                       </div>
                       <img src={m.imageUrl} alt={m.caption} style={{ width: "100%", display: "block", minHeight: 80, background: "rgba(0,0,0,0.3)" }} onError={e => { e.target.style.opacity = "0.2"; }} />
                     </div>
