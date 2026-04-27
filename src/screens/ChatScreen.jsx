@@ -146,6 +146,25 @@ function Markdown({ text, onArtifact }) {
       const codeStr = code.join("\n");
       if (lang === "html") {
         els.push(<HtmlInlineCard key={i} code={codeStr} onExpand={onArtifact ? () => onArtifact({ type: "html", code: codeStr, title: "Live Preview" }) : undefined} />);
+      } else if (lang === "jsx" || lang === "tsx" || lang === "react") {
+        // Wrap React JSX in a standalone HTML page using Babel standalone + React CDN
+        const reactHtml = `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+<style>*{box-sizing:border-box}body{margin:0;padding:16px;background:#0a0a0f;color:#fff;font-family:'Inter',sans-serif}</style>
+</head><body>
+<div id="root"></div>
+<script type="text/babel">
+${codeStr}
+const __comp = typeof App !== 'undefined' ? App : (typeof default_export !== 'undefined' ? default_export : null);
+if (__comp) ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(__comp));
+else document.getElementById('root').innerHTML='<p style="color:#ff6b6b">Export or define an App component.</p>';
+<\/script>
+</body></html>`;
+        els.push(<HtmlInlineCard key={i} code={reactHtml} onExpand={onArtifact ? () => onArtifact({ type: "html", code: reactHtml, title: "React Component" }) : undefined} />);
       } else if (lang === "mermaid") {
         const mermaidHtml = `<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"><\/script><style>body{background:#0d0d0d;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;box-sizing:border-box}.mermaid{max-width:100%}</style></head><body><div class="mermaid">${codeStr}</div><script>mermaid.initialize({startOnLoad:true,theme:'dark'})<\/script></body></html>`;
         els.push(
@@ -303,7 +322,9 @@ Special commands (emit on own line when relevant):
 [LOCATION] — get GPS
 [OPEN: url] — open website
 
-DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth transitions (cubic-bezier), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality. This renders live in AURA's preview panel.${artifactContext}`;
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth transitions (cubic-bezier), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality. This renders live in AURA's preview panel.
+
+REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code block. Define an \`App\` function component. Use inline styles or plain CSS. No imports needed — React is available globally.${artifactContext}`;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
