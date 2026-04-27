@@ -191,6 +191,7 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const [artifactTab, setArtifactTab] = useState("preview"); // "preview" | "code"
 
   const endRef       = useRef();
+  const artifactRef  = useRef(null);
   const wakeRef      = useRef();
   const textareaRef  = useRef();
   const fileInputRef = useRef();
@@ -202,6 +203,7 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const micGrantedRef = useRef(false);
 
   useEffect(() => { msgsRef.current = msgs; }, [msgs]);
+  useEffect(() => { artifactRef.current = artifact; }, [artifact]);
 
   // Pre-grant mic on mount so wake word fires hands-free (no tap needed)
   useEffect(() => {
@@ -212,6 +214,10 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
 
   const userProfile = sto.get("user_profile", null);
   const userName    = userProfile?.name || authSession?.name || null;
+
+  const artifactContext = artifact
+    ? `\n\nCURRENT OPEN DESIGN (already rendered in the live preview panel):\n\`\`\`html\n${artifact.code}\n\`\`\`\nIf the user asks to change, update, edit, modify, improve, or fix this design → output a complete revised \`\`\`html code block with ALL changes applied. Keep everything else intact.`
+    : "";
 
   const SYSTEM = agentMode
     ? `${agentMode.prompt}
@@ -226,7 +232,7 @@ Special commands (emit on own line when relevant):
 [LOCATION] — get GPS
 [OPEN: url] — open website
 
-DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth animations (cubic-bezier transitions), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality.`
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth animations (cubic-bezier transitions), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality.${artifactContext}`
     : `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
 ${modePrompt ? `\n${modePrompt}` : ""}
@@ -239,7 +245,7 @@ Special commands (emit on own line when relevant):
 [LOCATION] — get GPS
 [OPEN: url] — open website
 
-DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth transitions (cubic-bezier), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality. This renders live in AURA's preview panel.`;
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth transitions (cubic-bezier), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality. This renders live in AURA's preview panel.${artifactContext}`;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -471,6 +477,13 @@ DESIGN RULE: When asked to design, build, or create any website, web app, dashbo
         onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Chat", clean.slice(0, 60));
         return updated;
       });
+      // Auto-open or update artifact panel whenever AURA outputs HTML
+      const htmlMatch = clean.match(/```html\n([\s\S]*?)```/);
+      if (htmlMatch) {
+        const existingTitle = artifactRef.current?.title || "Live Preview";
+        setArtifact({ type: "html", code: htmlMatch[1], title: existingTitle });
+        setArtifactTab("preview");
+      }
       // Auto-speak only in voice conversation mode — tap 🔊 to speak manually
     } catch (e) {
       setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `⚠️ ${e.message}`, streaming: false } : x));
