@@ -18,6 +18,7 @@ const PLUS_OPTIONS = [
   { id: "search",   icon: "🌐", label: "Web Search"   },
   { id: "think",    icon: "🧠", label: "Think Deeper" },
   { id: "research", icon: "🔍", label: "Deep Research"},
+  { id: "prompts",  icon: "📌", label: "Saved"        },
 ];
 
 const QUICK = [
@@ -43,9 +44,11 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const [searchMode, setSearchMode]   = useState(false);
   const [editingIdx, setEditingIdx]   = useState(null);
   const [editVal, setEditVal]         = useState("");
-  const [artifact, setArtifact]       = useState(null); // { type: "html"|"mermaid", code, title }
-  const [artifactTab, setArtifactTab] = useState("preview"); // "preview" | "code"
+  const [artifact, setArtifact]       = useState(null);
+  const [artifactTab, setArtifactTab] = useState("preview");
   const [suggestions, setSuggestions] = useState([]);
+  const [savedPrompts, setSavedPrompts] = useState(() => sto.get("aura_prompts", []));
+  const [showPrompts, setShowPrompts]   = useState(false);
 
   const endRef       = useRef();
   const artifactRef  = useRef(null);
@@ -320,10 +323,31 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
     if (id === "search")   { setSearchMode(s => !s); textareaRef.current?.focus(); return; }
     if (id === "think")    { setThinkMode(t => !t); return; }
     if (id === "research") { setInput("Research in depth: "); textareaRef.current?.focus(); return; }
+    if (id === "prompts")  { setShowPrompts(true); return; }
   };
 
   const copyMsg = (text, idx) => {
     navigator.clipboard?.writeText(text).then(() => { setCopied(idx); setTimeout(() => setCopied(null), 2000); });
+  };
+
+  const savePrompt = (text) => {
+    const updated = [{ id: Date.now(), text, ts: Date.now() }, ...savedPrompts].slice(0, 30);
+    setSavedPrompts(updated);
+    sto.set("aura_prompts", updated);
+  };
+
+  const deletePrompt = (id) => {
+    const updated = savedPrompts.filter(p => p.id !== id);
+    setSavedPrompts(updated);
+    sto.set("aura_prompts", updated);
+  };
+
+  const retryLast = () => {
+    const lastUser = [...msgs].reverse().find(m => m.role === "user");
+    if (!lastUser) return;
+    const trimmed = msgs.slice(0, msgs.lastIndexOf(lastUser) + 1).slice(0, -1);
+    setMsgs(trimmed);
+    send(lastUser.content, trimmed);
   };
 
   const exportChat = () => {
@@ -619,17 +643,23 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
                             {m.streaming && <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />}
                           </div>
                           {m.role === "user" && !loading && (
-                            <button onClick={() => { setEditingIdx(i); setEditVal(m.content); }}
-                              style={{ position: "absolute", top: -8, left: -28, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 22, height: 22, cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0 }}
-                              className="edit-btn">✎</button>
+                            <div style={{ position: "absolute", top: -8, left: -58, display: "flex", gap: 3, opacity: 0 }} className="edit-btn">
+                              <button onClick={() => { setEditingIdx(i); setEditVal(m.content); }}
+                                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 22, height: 22, cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>✎</button>
+                              <button onClick={() => savePrompt(m.content)}
+                                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 22, height: 22, cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }} title="Save prompt">📌</button>
+                            </div>
                           )}
                         </div>
                       )}
                       {m.role === "assistant" && !m.streaming && m.content && (
                         <>
-                          <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
+                          <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
                             <button onClick={() => copyMsg(m.content, i)} style={{ background: copied === i ? `${C.green}18` : "rgba(255,255,255,0.04)", border: `1px solid ${copied === i ? C.green + "44" : "rgba(255,255,255,0.07)"}`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: copied === i ? C.green : "rgba(255,255,255,0.3)" }}>{copied === i ? "✓" : "⧉"}</button>
                             <button onClick={() => speakFull(m.content)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>🔊</button>
+                            {m.content.startsWith("⚠️") && (
+                              <button onClick={retryLast} style={{ background: `${C.gold}12`, border: `1px solid ${C.gold}33`, borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 10, color: C.gold, fontFamily: "'DM Mono',monospace" }}>↻ Retry</button>
+                            )}
                           </div>
                           {i === msgs.length - 1 && suggestions.length > 0 && !loading && (
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
@@ -701,6 +731,35 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <div style={{ width: 48, height: 48, borderRadius: 14, background: (opt.id === "think" && thinkMode) ? `${C.gold}22` : (opt.id === "search" && searchMode) ? `${C.cyan}22` : "rgba(255,255,255,0.07)", border: `1px solid ${(opt.id === "think" && thinkMode) ? C.gold + "55" : (opt.id === "search" && searchMode) ? C.cyan + "55" : "rgba(255,255,255,0.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{opt.icon}</div>
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>{opt.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── SAVED PROMPTS SHEET ── */}
+      {showPrompts && (
+        <>
+          <div onClick={() => setShowPrompts(false)} style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 41, background: "#0d0d0d", borderRadius: "20px 20px 0 0", padding: "14px 16px 32px", border: `1px solid ${C.border}`, maxHeight: "65%", display: "flex", flexDirection: "column" }}>
+            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.12)", borderRadius: 2, margin: "0 auto 14px" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>📌 Saved Prompts</span>
+              <button onClick={() => setShowPrompts(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
+              {savedPrompts.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "24px 0", fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
+                  No saved prompts yet.<br />Hover a message you sent and tap 📌 to save it.
+                </div>
+              ) : savedPrompts.map(p => (
+                <div key={p.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px" }}>
+                  <div onClick={() => { setInput(p.text); setShowPrompts(false); setTimeout(() => textareaRef.current?.focus(), 100); }}
+                    style={{ flex: 1, fontSize: 12, color: "rgba(255,255,255,0.8)", lineHeight: 1.6, cursor: "pointer" }}>
+                    {p.text.slice(0, 140)}{p.text.length > 140 ? "…" : ""}
+                  </div>
+                  <button onClick={() => deletePrompt(p.id)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 14, flexShrink: 0, padding: "2px 4px" }}>✕</button>
                 </div>
               ))}
             </div>

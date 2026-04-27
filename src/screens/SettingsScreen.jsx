@@ -25,7 +25,7 @@ const Section = ({ title, children, color }) => (
   </div>
 );
 
-export default function SettingsScreen({ auraName, onNameChange, session, onLogout }) {
+export default function SettingsScreen({ auraName, onNameChange, session, onLogout, canInstall, onInstall }) {
   const [name, setName]   = useState(auraName);
   const [saved, setSaved] = useState(false);
   const [profile, setProfile] = useState(() => sto.get("user_profile", { name: "", role: "", preferences: "", projects: "" }));
@@ -179,6 +179,17 @@ export default function SettingsScreen({ auraName, onNameChange, session, onLogo
           </div>
         </Card>
       </Section>
+
+      {/* ── INSTALL ── */}
+      {canInstall && (
+        <Section title="App">
+          <Card color={C.cyan}>
+            <div style={{ fontSize: 14, color: "#fff", fontWeight: 700, marginBottom: 4 }}>Install AURA</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14, lineHeight: 1.6 }}>Add to your home screen for instant access — works offline, no browser bar.</div>
+            <Btn color={C.cyan} onClick={onInstall} style={{ width: "100%" }}>⬇ Install App</Btn>
+          </Card>
+        </Section>
+      )}
 
       {/* ── ABOUT ── */}
       <Section title="About">

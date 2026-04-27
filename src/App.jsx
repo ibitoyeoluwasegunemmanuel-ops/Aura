@@ -4,17 +4,18 @@ import { CSS }  from "./theme/css";
 import { sto }  from "./utils/storage";
 import { auth } from "./utils/auth";
 import { Modal, Progress } from "./components/ui";
-import AuthScreen      from "./screens/AuthScreen";
-import AdminDashboard  from "./screens/AdminDashboard";
-import ChatScreen      from "./screens/ChatScreen";
-import SettingsScreen  from "./screens/SettingsScreen";
-import AgentsScreen    from "./screens/AgentsScreen";
-import DesignScreen    from "./screens/DesignScreen";
-import AutomateScreen  from "./screens/AutomateScreen";
-import NavigateScreen  from "./screens/NavigateScreen";
-import TranslateScreen from "./screens/TranslateScreen";
-import CodeScreen      from "./screens/CodeScreen";
-import Sidebar         from "./components/Sidebar";
+import AuthScreen        from "./screens/AuthScreen";
+import AdminDashboard    from "./screens/AdminDashboard";
+import ChatScreen        from "./screens/ChatScreen";
+import SettingsScreen    from "./screens/SettingsScreen";
+import AgentsScreen      from "./screens/AgentsScreen";
+import DesignScreen      from "./screens/DesignScreen";
+import AutomateScreen    from "./screens/AutomateScreen";
+import NavigateScreen    from "./screens/NavigateScreen";
+import TranslateScreen   from "./screens/TranslateScreen";
+import CodeScreen        from "./screens/CodeScreen";
+import OnboardingScreen  from "./screens/OnboardingScreen";
+import Sidebar           from "./components/Sidebar";
 
 const MODES = [
   { id: "chat",     icon: "💬", name: "AURA Chat",    label: "General AI",    color: C.cyan,    prompt: "" },
@@ -49,6 +50,10 @@ export default function AuraOS() {
   const [darkMode, setDarkMode]       = useState(() => sto.get("aura_dark_mode", true));
   const [projects, setProjects]               = useState(() => sto.get("aura_projects", []));
   const [activeProjectId, setActiveProjectId] = useState(null);
+  const [onboarded, setOnboarded]             = useState(() => sto.get("aura_onboarded", false));
+  const [searchOpen, setSearchOpen]           = useState(false);
+  const [searchQ, setSearchQ]                 = useState("");
+  const [installPrompt, setInstallPrompt]     = useState(null);
   const touchStartX = useRef(0);
 
   const theme = darkMode ? {
@@ -92,6 +97,41 @@ export default function AuraOS() {
     window.addEventListener("touchend",   onEnd,   { passive: true });
     return () => { window.removeEventListener("touchstart", onStart); window.removeEventListener("touchend", onEnd); };
   }, [view]);
+
+  // Capture PWA install prompt
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  // Global keyboard: Ctrl+K → search, Escape → close search
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); setSearchOpen(s => !s); setSearchQ(""); }
+      if (e.key === "Escape") setSearchOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const triggerInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") setInstallPrompt(null);
+  };
+
+  // Search across all sessions
+  const searchResults = searchQ.trim().length > 1
+    ? sessions.flatMap(s => {
+        const msgs = sto.get("msgs_" + s.id, []);
+        return msgs
+          .filter(m => m.content?.toLowerCase().includes(searchQ.toLowerCase()))
+          .slice(0, 3)
+          .map(m => ({ sid: s.id, title: s.title, snippet: m.content.slice(0, 120), role: m.role }));
+      }).slice(0, 12)
+    : [];
 
   const goBack = () => setView("chat");
 
@@ -198,6 +238,13 @@ export default function AuraOS() {
     </>
   );
 
+  if (!onboarded) return (
+    <>
+      <style>{CSS}</style>
+      <OnboardingScreen onComplete={({ aiName }) => { setAuraName(aiName); setOnboarded(true); }} />
+    </>
+  );
+
   if (minimized) return (
     <>
       <style>{CSS}</style>
@@ -247,6 +294,8 @@ export default function AuraOS() {
           })()}
           <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeTitle}</div>
           <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 9, color: theme.textFaint }}>{time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+          <button onClick={() => { setSearchOpen(s => !s); setSearchQ(""); }} style={{ background: theme.hover, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: theme.textFaint, lineHeight: 1 }} title="Search (Ctrl+K)">🔍</button>
+          {installPrompt && <button onClick={triggerInstall} style={{ background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 10, color: C.cyan, fontFamily: "'DM Mono',monospace", lineHeight: 1, whiteSpace: "nowrap" }}>⬇ Install</button>}
           <button onClick={() => setMinimized(true)} style={{ background: theme.hover, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: theme.textFaint, lineHeight: 1 }}>—</button>
         </div>
 
@@ -270,6 +319,8 @@ export default function AuraOS() {
               onNameChange={handleName}
               session={session}
               onLogout={handleLogout}
+              canInstall={!!installPrompt}
+              onInstall={triggerInstall}
             />
           )}
           {view === "admin" && (
@@ -297,6 +348,51 @@ export default function AuraOS() {
           )}
         </div>
       </div>
+
+      {/* ── SEARCH OVERLAY ── */}
+      {searchOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "12vh" }}
+          onClick={e => { if (e.target === e.currentTarget) setSearchOpen(false); }}>
+          <div style={{ width: "min(560px, 92vw)", background: "#0d0d0d", borderRadius: 18, border: `1px solid ${C.cyan}33`, overflow: "hidden", boxShadow: `0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px ${C.cyan}11` }}>
+            {/* Input */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: `1px solid rgba(255,255,255,0.06)` }}>
+              <span style={{ fontSize: 16, color: "rgba(255,255,255,0.3)" }}>🔍</span>
+              <input autoFocus value={searchQ} onChange={e => setSearchQ(e.target.value)}
+                placeholder="Search conversations… (Ctrl+K)"
+                style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 14, fontFamily: "'DM Mono',monospace", outline: "none" }} />
+              <kbd style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, padding: "2px 6px" }}>ESC</kbd>
+            </div>
+
+            {/* Results */}
+            <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
+              {searchQ.trim().length < 2 ? (
+                <div style={{ padding: "20px 16px", fontSize: 12, color: "rgba(255,255,255,0.2)", textAlign: "center" }}>
+                  Type to search across all your conversations
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div style={{ padding: "20px 16px", fontSize: 12, color: "rgba(255,255,255,0.2)", textAlign: "center" }}>No results for "{searchQ}"</div>
+              ) : searchResults.map((r, i) => (
+                <div key={i} onClick={() => { selectSession(r.sid); setSearchOpen(false); setSearchQ(""); }}
+                  style={{ padding: "11px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", transition: "background 0.12s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: r.role === "user" ? C.purple : C.cyan }}>{r.role === "user" ? "You" : auraName}</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>in {r.title}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
+                    {r.snippet.split(new RegExp(`(${searchQ})`, "gi")).map((part, j) =>
+                      part.toLowerCase() === searchQ.toLowerCase()
+                        ? <mark key={j} style={{ background: `${C.cyan}44`, color: "#fff", borderRadius: 2, padding: "0 1px" }}>{part}</mark>
+                        : part
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PROFILE POPUP ── */}
       <Modal open={showProfile} onClose={() => setShowProfile(false)} color={C.cyan} title="Your Profile">
