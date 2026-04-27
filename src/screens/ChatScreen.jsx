@@ -70,6 +70,68 @@ function HtmlInlineCard({ code, onExpand }) {
   );
 }
 
+function CodeBlock({ lang, code }) {
+  const [output, setOutput] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const canRun = ["js", "javascript"].includes(lang);
+
+  const copyCode = () => {
+    navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
+  };
+
+  const runCode = () => {
+    setRunning(true); setOutput(null);
+    const html = `<!DOCTYPE html><html><body><script>
+const _logs=[];
+console.log=(...a)=>_logs.push(a.map(x=>typeof x==='object'?JSON.stringify(x,null,2):String(x)).join(' '));
+console.error=(...a)=>_logs.push('ERR: '+a.join(' '));
+try{
+  const _r=(function(){\n${code}\n})();
+  window.parent.postMessage({t:'ok',logs:_logs,result:_r!==undefined?String(_r):undefined},'*');
+}catch(e){
+  window.parent.postMessage({t:'err',logs:_logs,error:e.message},'*');
+}
+<\/script></body></html>`;
+    const handler = (e) => {
+      if (e.data?.t === "ok" || e.data?.t === "err") {
+        window.removeEventListener("message", handler);
+        setRunning(false);
+        setOutput(e.data);
+        if (frame.parentNode) frame.remove();
+      }
+    };
+    window.addEventListener("message", handler);
+    const frame = document.createElement("iframe");
+    frame.sandbox = "allow-scripts";
+    frame.style.display = "none";
+    document.body.appendChild(frame);
+    frame.srcdoc = html;
+    setTimeout(() => { frame.remove(); window.removeEventListener("message", handler); setRunning(false); }, 6000);
+  };
+
+  return (
+    <div style={{ margin: "6px 0", background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: "rgba(255,255,255,0.03)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        {lang && <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: 2, flex: 1 }}>{lang.toUpperCase()}</span>}
+        {canRun && <button onClick={runCode} disabled={running} style={{ background: running ? "rgba(255,255,255,0.05)" : `${C.green}18`, border: `1px solid ${C.green}44`, borderRadius: 5, padding: "2px 8px", cursor: running ? "default" : "pointer", fontSize: 10, color: running ? "rgba(255,255,255,0.3)" : C.green, fontFamily: "'DM Mono',monospace", marginRight: 6 }}>{running ? "⏳" : "▶ Run"}</button>}
+        <button onClick={copyCode} style={{ background: copied ? `${C.green}18` : "transparent", border: `1px solid ${copied ? C.green + "44" : "rgba(255,255,255,0.1)"}`, borderRadius: 5, padding: "2px 8px", cursor: "pointer", fontSize: 10, color: copied ? C.green : "rgba(255,255,255,0.3)", fontFamily: "'DM Mono',monospace" }}>{copied ? "✓" : "⧉"}</button>
+      </div>
+      <pre style={{ margin: 0, padding: "12px 14px", overflowX: "auto" }}>
+        <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#a8ff78", whiteSpace: "pre" }}>{code}</code>
+      </pre>
+      {output && (
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "8px 14px", background: output.t === "err" ? "rgba(255,80,80,0.07)" : "rgba(0,255,100,0.05)" }}>
+          <div style={{ fontSize: 9, color: output.t === "err" ? "#ff6b6b" : C.green, letterSpacing: 2, marginBottom: 4 }}>{output.t === "err" ? "ERROR" : "OUTPUT"}</div>
+          {output.logs?.length > 0 && <pre style={{ margin: 0, fontFamily: "'DM Mono',monospace", fontSize: 11, color: "rgba(255,255,255,0.7)", whiteSpace: "pre-wrap" }}>{output.logs.join("\n")}</pre>}
+          {output.result !== undefined && <pre style={{ margin: output.logs?.length ? "4px 0 0" : 0, fontFamily: "'DM Mono',monospace", fontSize: 11, color: C.cyan, whiteSpace: "pre-wrap" }}>→ {output.result}</pre>}
+          {output.error && <pre style={{ margin: 0, fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#ff6b6b", whiteSpace: "pre-wrap" }}>{output.error}</pre>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Markdown({ text, onArtifact }) {
   const lines = text.split("\n");
   const els = [];
@@ -93,12 +155,7 @@ function Markdown({ text, onArtifact }) {
           </div>
         );
       } else {
-        els.push(
-          <pre key={i} style={{ background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px", overflowX: "auto", margin: "6px 0" }}>
-            {lang && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginBottom: 6, letterSpacing: 2 }}>{lang.toUpperCase()}</div>}
-            <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#a8ff78", whiteSpace: "pre" }}>{codeStr}</code>
-          </pre>
-        );
+        els.push(<CodeBlock key={i} lang={lang} code={codeStr} />);
       }
     } else if (line.trim().startsWith("$$")) {
       const mathLines = [];
