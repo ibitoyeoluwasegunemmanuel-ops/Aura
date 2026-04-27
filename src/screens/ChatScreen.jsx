@@ -561,6 +561,31 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
     navigator.clipboard?.writeText(text).then(() => { setCopied(idx); setTimeout(() => setCopied(null), 2000); });
   };
 
+  const exportChat = () => {
+    const md = msgs.filter(m => m.type !== "image").map(m =>
+      m.role === "user" ? `**You:** ${m.content}` : `**${auraName}:** ${m.content}`
+    ).join("\n\n---\n\n");
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AURA Chat Export</title>
+<style>body{font-family:'Inter',sans-serif;background:#02020a;color:#e0e0e0;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.7}
+h1{color:#00ffe5;font-size:18px;border-bottom:1px solid #333;padding-bottom:12px}
+.user{background:linear-gradient(135deg,#7c3aed22,#1d4ed822);border:1px solid #7c3aed44;border-radius:18px 18px 4px 18px;padding:12px 16px;margin:16px 0;max-width:80%;margin-left:auto}
+.ai{padding:12px 0;border-bottom:1px solid #1a1a2e;margin:16px 0}
+.label{font-size:10px;letter-spacing:2px;color:#666;margin-bottom:6px;text-transform:uppercase}
+pre{background:#0d0d1a;border:1px solid #333;border-radius:8px;padding:12px;overflow-x:auto;font-size:12px}
+code{color:#a8ff78;font-family:'DM Mono',monospace}
+strong{color:#fff}em{color:#ccc}
+.ts{font-size:10px;color:#333;text-align:right;margin-top:40px}</style></head>
+<body><h1>◈ AURA Chat Export</h1>
+${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
+  ? `<div class="user"><div class="label">You</div>${m.content.replace(/</g,"&lt;")}</div>`
+  : `<div class="ai"><div class="label">${auraName}</div>${m.content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/```(\w*)\n([\s\S]*?)```/g, "<pre><code>$2</code></pre>").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\*(.+?)\*/g,"<em>$1</em>")}</div>`
+).join("")}
+<div class="ts">Exported ${new Date().toLocaleString()} · AURA OS by CEO Global</div></body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "aura-chat.html"; a.click(); URL.revokeObjectURL(a.href);
+    navigator.clipboard?.writeText(md);
+  };
+
   const send = async (text, baseHistory) => {
     const t = (text || input).trim();
     if ((!t && !attachment) || loading) return;
@@ -846,6 +871,17 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
           </div>
         )}
       </div>
+
+      {/* ── EXPORT BAR (shows when there are messages) ── */}
+      {hasMessages && !loading && (
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "2px 16px 0", flexShrink: 0 }}>
+          <button onClick={exportChat} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", gap: 4, padding: "4px 6px", borderRadius: 6 }}
+            onMouseEnter={e => e.currentTarget.style.color = "rgba(255,255,255,0.5)"}
+            onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.2)"}>
+            ↗ Export chat
+          </button>
+        </div>
+      )}
 
       {/* ── PLUS BOTTOM SHEET ── */}
       {showPlus && (
