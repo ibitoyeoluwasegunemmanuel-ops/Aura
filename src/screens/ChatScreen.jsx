@@ -10,6 +10,17 @@ import Markdown from "../components/Markdown";
 const CMD_RE = /\[(IMAGE|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
 const getSRLang = () => sto.get("aura_lang", "en-US");
 
+// Waveform icon — matches Claude's voice button style
+const WaveIcon = ({ size = 18, color = "currentColor", animate = false }) => (
+  <svg width={size} height={size} viewBox="0 0 22 18" fill={color}>
+    <rect x="0"  y="7"  width="3" height="4"  rx="1.5" style={animate ? { animation: "waveBar1 0.9s ease-in-out infinite" } : {}} />
+    <rect x="4.5" y="4" width="3" height="10" rx="1.5" style={animate ? { animation: "waveBar2 0.9s ease-in-out infinite 0.15s" } : {}} />
+    <rect x="9"  y="0"  width="3" height="18" rx="1.5" style={animate ? { animation: "waveBar3 0.9s ease-in-out infinite 0.3s" } : {}} />
+    <rect x="13.5" y="4" width="3" height="10" rx="1.5" style={animate ? { animation: "waveBar2 0.9s ease-in-out infinite 0.45s" } : {}} />
+    <rect x="19" y="7"  width="3" height="4"  rx="1.5" style={animate ? { animation: "waveBar1 0.9s ease-in-out infinite 0.6s" } : {}} />
+  </svg>
+);
+
 const PLUS_OPTIONS = [
   { id: "camera",   icon: "📷", label: "Camera"       },
   { id: "photos",   icon: "🖼️", label: "Photos"       },
@@ -214,7 +225,7 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
       const trimmed = history.length > 30 ? history.slice(-30) : history;
       await callClaudeStream(
         trimmed.map(m => ({ role: m.role, content: m.content })),
-        SYSTEM + "\n\nCALL MODE: Reply in 1-3 natural sentences. No markdown. Be conversational.",
+        SYSTEM + "\n\nVOICE MODE: Reply naturally and conversationally. No markdown, no bullet points — speak as if talking. Keep it natural.",
         (chunk) => { full += chunk; setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x)); }
       );
       const clean = full.replace(CMD_RE, "").replace(/\[FOLLOWUPS:[^\]]*\]/i, "").trim();
@@ -471,43 +482,56 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
       <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.txt,.doc,.docx" style={{ display: "none" }} onChange={e => handleFile(e.target.files?.[0])} />
       <input ref={camInputRef}  type="file" accept="image/*" capture="environment"            style={{ display: "none" }} onChange={e => handleFile(e.target.files?.[0])} />
 
-      {/* ── CALL UI ── */}
+      {/* ── VOICE ASSISTANT UI ── */}
       {callActive && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 50, background: "#02020af8", backdropFilter: "blur(20px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28 }}>
-          <div style={{ fontSize: 10, letterSpacing: 4, color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>AURA · ON CALL</div>
+        <div style={{ position: "absolute", inset: 0, zIndex: 50, background: "#03030cf5", backdropFilter: "blur(24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32 }}>
 
-          {/* Avatar ring */}
-          <div style={{ position: "relative", width: 140, height: 140 }}>
-            <div style={{ position: "absolute", inset: -18, borderRadius: "50%", border: `2px solid ${callState === "speaking" ? C.cyan : callState === "listening" ? C.green : C.gold}22`, animation: "pulse 1.6s ease-in-out infinite" }} />
-            <div style={{ position: "absolute", inset: -8, borderRadius: "50%", border: `1.5px solid ${callState === "speaking" ? C.cyan : callState === "listening" ? C.green : C.gold}44`, animation: "rotate 6s linear infinite" }} />
-            <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: `linear-gradient(135deg,${C.cyan}22,${C.purple}22)`, border: `2px solid ${callState === "speaking" ? C.cyan : C.purple}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56, color: C.cyan }}>◈</div>
+          {/* Status pill */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 16px", borderRadius: 20, background: callState === "listening" ? `${C.green}18` : callState === "thinking" ? `${C.gold}18` : `${C.cyan}18`, border: `1px solid ${callState === "listening" ? C.green + "44" : callState === "thinking" ? C.gold + "44" : C.cyan + "44"}` }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: callState === "listening" ? C.green : callState === "thinking" ? C.gold : C.cyan, animation: "pulse 1s infinite" }} />
+            <span style={{ fontSize: 10, letterSpacing: 2, color: callState === "listening" ? C.green : callState === "thinking" ? C.gold : C.cyan, fontFamily: "'DM Mono',monospace" }}>
+              {callState === "listening" ? "LISTENING" : callState === "thinking" ? "THINKING" : "SPEAKING"}
+            </span>
           </div>
 
-          {/* AI name + status */}
+          {/* Waveform visualizer */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, height: 80 }}>
+            {[
+              { h: callState === "speaking" ? "40%" : "22%", delay: "0s"    },
+              { h: callState === "speaking" ? "70%" : "45%", delay: "0.12s" },
+              { h: callState === "speaking" ? "100%": "70%", delay: "0.24s" },
+              { h: callState === "speaking" ? "70%" : "45%", delay: "0.36s" },
+              { h: callState === "speaking" ? "40%" : "22%", delay: "0.48s" },
+              { h: callState === "listening" ? "80%" : "28%", delay: "0.1s" },
+              { h: callState === "listening" ? "55%" : "18%", delay: "0.22s"},
+            ].map((bar, i) => (
+              <div key={i} style={{ width: 5, borderRadius: 3, background: callState === "listening" ? C.green : callState === "speaking" ? C.cyan : C.gold, height: bar.h, animation: (callState === "listening" || callState === "speaking") ? `waveBar${i % 3 + 1} 0.8s ease-in-out infinite` : "none", animationDelay: bar.delay, transition: "height 0.3s, background 0.3s", minHeight: 6 }} />
+            ))}
+          </div>
+
+          {/* AI name */}
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 22, fontWeight: 900, color: "#fff", marginBottom: 8 }}>{auraName}</div>
-            <div style={{ fontSize: 14, letterSpacing: 1, color: callState === "listening" ? C.green : callState === "thinking" ? C.gold : C.cyan }}>
-              {callState === "listening" ? "● Listening…" : callState === "thinking" ? "◌ Thinking…" : "▶ Speaking…"}
-            </div>
+            <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: 2, marginBottom: 6 }}>{auraName}</div>
+            {callTranscript && (
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", maxWidth: 280, lineHeight: 1.7, fontStyle: "italic" }}>
+                "{callTranscript}"
+              </div>
+            )}
+            {!callTranscript && callState === "speaking" && (() => {
+              const last = [...msgs].reverse().find(m => m.role === "assistant" && m.content && !m.streaming);
+              return last ? <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", maxWidth: 260, lineHeight: 1.7 }}>{last.content.slice(0, 100)}{last.content.length > 100 ? "…" : ""}</div> : null;
+            })()}
           </div>
 
-          {/* Live transcript */}
-          {callTranscript && (
-            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.75)", maxWidth: 300, textAlign: "center", lineHeight: 1.7, fontStyle: "italic" }}>
-              "{callTranscript}"
-            </div>
-          )}
-          {callState === "speaking" && (() => {
-            const last = [...msgs].reverse().find(m => m.role === "assistant" && m.content && !m.streaming);
-            return last ? <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", maxWidth: 280, textAlign: "center", lineHeight: 1.7 }}>{last.content.slice(0, 120)}{last.content.length > 120 ? "…" : ""}</div> : null;
-          })()}
-
-          {/* End call button */}
+          {/* End button — white circle with X, like Claude's app */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginTop: 8 }}>
-            <button onClick={endCall} style={{ width: 72, height: 72, borderRadius: "50%", background: C.red, border: "none", cursor: "pointer", fontSize: 26, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 8px 32px ${C.red}66`, transition: "transform 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.transform = "scale(1.08)"}
-              onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>📵</button>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: 1 }}>END CALL</span>
+            <button onClick={endCall}
+              style={{ width: 70, height: 70, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 40px rgba(255,255,255,0.2)", transition: "transform 0.15s, box-shadow 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.07)"; e.currentTarget.style.boxShadow = "0 12px 50px rgba(255,255,255,0.3)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 8px 40px rgba(255,255,255,0.2)"; }}>
+              <WaveIcon size={26} color="#000" />
+            </button>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: 1 }}>TAP TO END</span>
           </div>
         </div>
       )}
@@ -520,7 +544,7 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
               <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1.5px solid ${C.cyan}44`, animation: "rotate 8s linear infinite" }} />
               <div style={{ position: "absolute", inset: 5, borderRadius: "50%", border: `1px solid ${C.purple}33`, animation: "rotate 12s linear infinite reverse" }} />
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: C.cyan }}>◈</div>
-              <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>📞 TAP TO CALL</div>
+              <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>TAP TO SPEAK</div>
             </div>
             {agentMode ? (
               <div style={{ textAlign: "center", marginTop: 10, width: "100%", maxWidth: 340 }}>
@@ -571,9 +595,9 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
                   🎙
                 </button>
                 <button onClick={startCall}
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
-                  title="Call AURA">
-                  📞
+                  style={{ background: callActive ? `${C.cyan}22` : "rgba(255,255,255,0.06)", border: `1px solid ${callActive ? C.cyan + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: callActive ? C.cyan : "rgba(255,255,255,0.5)", animation: callActive ? "pulse 1.4s infinite" : "none" }}
+                  title="Voice assistant">
+                  <WaveIcon size={17} />
                 </button>
                 <button onClick={() => send()} disabled={(!input.trim() && !attachment) || loading}
                   style={{ background: (input.trim() || attachment) && !loading ? `linear-gradient(135deg,${C.cyan},${C.purple})` : "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 38, height: 38, cursor: (input.trim() || attachment) && !loading ? "pointer" : "default", fontSize: 15, color: (input.trim() || attachment) && !loading ? "#000" : "rgba(255,255,255,0.2)", fontWeight: 800, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
