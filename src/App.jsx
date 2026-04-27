@@ -9,6 +9,11 @@ import AdminDashboard  from "./screens/AdminDashboard";
 import ChatScreen      from "./screens/ChatScreen";
 import SettingsScreen  from "./screens/SettingsScreen";
 import AgentsScreen    from "./screens/AgentsScreen";
+import DesignScreen    from "./screens/DesignScreen";
+import AutomateScreen  from "./screens/AutomateScreen";
+import NavigateScreen  from "./screens/NavigateScreen";
+import TranslateScreen from "./screens/TranslateScreen";
+import CodeScreen      from "./screens/CodeScreen";
 import Sidebar         from "./components/Sidebar";
 
 const MODES = [
@@ -181,7 +186,7 @@ export default function AuraOS() {
     });
   };
 
-  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : view === "agents" ? "AI Agents" : (sessions.find(s => s.id === activeSid)?.title || auraName);
+  const activeTitle = view === "settings" ? "Settings" : view === "admin" ? "Admin" : view === "agents" ? "AI Agents" : view === "design" ? "Design Brain" : view === "automate" ? "Automate" : view === "navigate" ? "Navigate" : view === "translate" ? "Translate" : view === "code" ? "Code Workspace" : (sessions.find(s => s.id === activeSid)?.title || auraName);
 
   if (!session) return (
     <>
@@ -271,6 +276,21 @@ export default function AuraOS() {
           )}
           {view === "agents" && (
             <AgentsScreen onLaunch={launchAgent} />
+          )}
+          {view === "design" && (
+            <DesignScreen auraName={auraName} />
+          )}
+          {view === "automate" && (
+            <AutomateScreen auraName={auraName} />
+          )}
+          {view === "navigate" && (
+            <NavigateScreen auraName={auraName} />
+          )}
+          {view === "translate" && (
+            <TranslateScreen />
+          )}
+          {view === "code" && (
+            <CodeScreen auraName={auraName} />
           )}
         </div>
       </div>
