@@ -292,6 +292,12 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const userProfile = sto.get("user_profile", null);
   const userName    = userProfile?.name || authSession?.name || null;
 
+  // Cross-session memory: last 5 exchanges from any session
+  const crossMemory = sto.get("aura_memory", []);
+  const memoryBlock = crossMemory.length > 0
+    ? "\n\nRECENT MEMORY (from past conversations):\n" + crossMemory.slice(-5).map(m => `• User asked: "${m.user}" → You replied: "${m.aura}"`).join("\n")
+    : "";
+
   const artifactContext = artifact
     ? `\n\nCURRENT OPEN DESIGN (already rendered in the live preview panel):\n\`\`\`html\n${artifact.code}\n\`\`\`\nIf the user asks to change, update, edit, modify, improve, or fix this design → output a complete revised \`\`\`html code block with ALL changes applied. Keep everything else intact.`
     : "";
@@ -309,7 +315,7 @@ Special commands (emit on own line when relevant):
 [LOCATION] — get GPS
 [OPEN: url] — open website
 
-DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth animations (cubic-bezier transitions), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality.${artifactContext}`
+DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth animations (cubic-bezier transitions), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality.${artifactContext}${memoryBlock}`
     : `You are ${auraName}, a genius personal AI OS — confident, direct, warm. Like a brilliant friend who always delivers.
 ${FOUNDER_SYSTEM_BLOCK}
 ${modePrompt ? `\n${modePrompt}` : ""}
@@ -324,7 +330,7 @@ Special commands (emit on own line when relevant):
 
 DESIGN RULE: When asked to design, build, or create any website, web app, dashboard, UI, landing page, or component — output ONLY a single complete \`\`\`html code block. No explanation before or after. The HTML must be fully self-contained with embedded CSS and JS. Design standard: dark background (#0a0a0f), glassmorphism cards (backdrop-filter: blur), CSS custom properties, smooth transitions (cubic-bezier), Google Fonts via CDN (Inter or Plus Jakarta Sans), gradient accents, real content (no lorem ipsum), mobile responsive, interactive hover states. Think: Stripe, Linear, Vercel design quality. This renders live in AURA's preview panel.
 
-REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code block. Define an \`App\` function component. Use inline styles or plain CSS. No imports needed — React is available globally.${artifactContext}`;
+REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code block. Define an \`App\` function component. Use inline styles or plain CSS. No imports needed — React is available globally.${artifactContext}${memoryBlock}`;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
@@ -589,6 +595,11 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
         onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Chat", clean.slice(0, 60));
         return updated;
       });
+      // Save exchange to cross-session memory (last 20 items)
+      const mem = sto.get("aura_memory", []);
+      mem.push({ ts: Date.now(), user: t.slice(0, 120), aura: clean.replace(/```[\s\S]*?```/g, "[code]").slice(0, 200) });
+      sto.set("aura_memory", mem.slice(-20));
+
       // Auto-open or update artifact panel whenever AURA outputs HTML
       const htmlMatch = clean.match(/```html\n([\s\S]*?)```/);
       if (htmlMatch) {

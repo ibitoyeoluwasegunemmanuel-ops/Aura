@@ -44,6 +44,7 @@ export default function SettingsScreen({ auraName, onNameChange, session, onLogo
   const clearMemory = () => {
     const empty = { name: "", role: "", preferences: "", projects: "" };
     sto.set("user_profile", empty);
+    sto.remove("aura_memory");
     setProfile(empty);
     setCleared(true);
     setTimeout(() => setCleared(false), 2000);
