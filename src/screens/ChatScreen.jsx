@@ -609,14 +609,16 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
       searchContext = searchContext.trim();
     }
 
-    const sysBase = thinkMode ? SYSTEM + "\n\nTHINKING MODE: Reason step by step carefully before responding." : SYSTEM;
-    const sys = searchContext ? sysBase + `\n\nWEB SEARCH RESULTS for "${t}":\n${searchContext}\n\nUse these results to answer accurately. Cite sources when useful.` : sysBase;
-    let full = "";
+    const sys = searchContext ? SYSTEM + `\n\nWEB SEARCH RESULTS for "${t}":\n${searchContext}\n\nUse these results to answer accurately. Cite sources when useful.` : SYSTEM;
+    let full = "", thinkingText = "";
     try {
       await callClaudeStream(apiMsgs, sys, (chunk) => {
         full += chunk;
         setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x));
-      });
+      }, (thinkChunk) => {
+        thinkingText += thinkChunk;
+        setMsgs(m => m.map(x => x.id === pid ? { ...x, thinking: thinkingText } : x));
+      }, thinkMode);
       const extra = [];
       if (full.includes("[IMAGE:")) {
         const desc = full.match(/\[IMAGE:\s*(.+?)\]/)?.[1] || t;
@@ -792,7 +794,15 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
                         </div>
                       ) : (
                         <div style={{ position: "relative" }} className="msg-wrap">
-                          <div style={{ padding: m.role === "user" ? "10px 15px" : "0", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : 0, background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent", border: m.role === "user" ? `1px solid ${C.purple}44` : "none", fontSize: 13.5, color: "rgba(255,255,255,0.9)", fontFamily: "'Inter','DM Mono',sans-serif" }}>
+                          {m.role === "assistant" && m.thinking && (
+                        <details style={{ marginBottom: 8 }}>
+                          <summary style={{ cursor: "pointer", fontSize: 11, color: C.gold, letterSpacing: 1, userSelect: "none", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                            <span>▸</span><span>🧠 THINKING PROCESS</span>
+                          </summary>
+                          <pre style={{ margin: "8px 0 0", padding: "10px 14px", background: `${C.gold}08`, border: `1px solid ${C.gold}18`, borderRadius: 10, fontSize: 11, color: `${C.gold}cc`, fontFamily: "'DM Mono',monospace", whiteSpace: "pre-wrap", lineHeight: 1.6, maxHeight: 300, overflowY: "auto" }}>{m.thinking}</pre>
+                        </details>
+                      )}
+                      <div style={{ padding: m.role === "user" ? "10px 15px" : "0", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : 0, background: m.role === "user" ? `linear-gradient(135deg,${C.purple}44,${C.blue}33)` : "transparent", border: m.role === "user" ? `1px solid ${C.purple}44` : "none", fontSize: 13.5, color: "rgba(255,255,255,0.9)", fontFamily: "'Inter','DM Mono',sans-serif" }}>
                             {m.role === "user" ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{m.content}</span> : <Markdown text={m.content} onArtifact={(a) => { setArtifact(a); setArtifactTab("preview"); }} />}
                             {m.streaming && <span style={{ display: "inline-block", width: 2, height: 15, background: C.cyan, marginLeft: 2, animation: "pulse 0.6s infinite", borderRadius: 1, verticalAlign: "text-bottom" }} />}
                           </div>

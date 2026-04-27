@@ -24,7 +24,7 @@ export default async function handler(req) {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
-      "anthropic-beta": "pdfs-2024-09-25",
+      "anthropic-beta": body.thinking ? "interleaved-thinking-2025-05-14,pdfs-2024-09-25" : "pdfs-2024-09-25",
     },
     body: JSON.stringify(body),
   });
