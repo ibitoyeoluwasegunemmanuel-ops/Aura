@@ -53,7 +53,7 @@ function HtmlPreview({ code }) {
         <iframe
           srcDoc={code}
           title="AURA Design Preview"
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           style={{ width: "100%", height: 460, border: "none", background: "#fff", display: "block" }}
         />
       )}
