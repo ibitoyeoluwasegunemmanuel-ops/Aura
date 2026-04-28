@@ -1,8 +1,19 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { C } from "../theme/colors";
 import { Card, Btn, Inp, Progress } from "../components/ui";
 import { speakFull } from "../utils/voice";
 import { sto } from "../utils/storage";
+
+const ACCENT_COLORS = [
+  { label: "Cyan",   hex: "#00ffe5" },
+  { label: "Purple", hex: "#a855f7" },
+  { label: "Green",  hex: "#4ade80" },
+  { label: "Gold",   hex: "#ffd700" },
+  { label: "Pink",   hex: "#f472b6" },
+  { label: "Orange", hex: "#fb923c" },
+  { label: "Blue",   hex: "#60a5fa" },
+  { label: "Red",    hex: "#f87171" },
+];
 
 const NAMES = ["AURA","JARVIS","NOVA","ZARA","APEX","IRIS","NEXUS","ARIA","ZEUS","LUNA"];
 const LANGS = [
@@ -25,7 +36,7 @@ const Section = ({ title, children, color }) => (
   </div>
 );
 
-export default function SettingsScreen({ auraName, onNameChange, session, onLogout, canInstall, onInstall }) {
+export default function SettingsScreen({ auraName, onNameChange, session, onLogout, canInstall, onInstall, accentColor, onAccentChange }) {
   const [name, setName]   = useState(auraName);
   const [saved, setSaved] = useState(false);
   const [profile, setProfile] = useState(() => sto.get("user_profile", { name: "", role: "", preferences: "", projects: "" }));
@@ -33,6 +44,32 @@ export default function SettingsScreen({ auraName, onNameChange, session, onLogo
   const [cleared, setCleared]     = useState(false);
   const [lang, setLang]           = useState(() => sto.get("aura_lang", "en-US"));
   const [langSaved, setLangSaved] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const importRef = useRef();
+
+  const exportData = () => {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) data[key] = localStorage.getItem(key);
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `aura-backup-${Date.now()}.json`; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  const importData = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        Object.entries(data).forEach(([k, v]) => localStorage.setItem(k, v));
+        setImportMsg("✓ Imported! Reloading…");
+        setTimeout(() => window.location.reload(), 1200);
+      } catch { setImportMsg("⚠️ Invalid backup file."); setTimeout(() => setImportMsg(""), 3000); }
+    };
+    reader.readAsText(file);
+  };
 
   const saveProfile = () => {
     sto.set("user_profile", profile);
@@ -190,6 +227,38 @@ export default function SettingsScreen({ auraName, onNameChange, session, onLogo
           </Card>
         </Section>
       )}
+
+      {/* ── THEME ── */}
+      <Section title="Theme">
+        <Card color={C.purple}>
+          <div style={{ fontSize: 14, color: "#fff", fontWeight: 700, marginBottom: 4 }}>Accent Color</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>Changes the primary highlight color across the app.</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+            {ACCENT_COLORS.map(c => (
+              <div key={c.hex} onClick={() => onAccentChange?.(c.hex)}
+                style={{ width: 36, height: 36, borderRadius: "50%", background: c.hex, cursor: "pointer", border: `3px solid ${accentColor === c.hex ? "#fff" : "transparent"}`, boxSizing: "border-box", transition: "border-color 0.15s", boxShadow: accentColor === c.hex ? `0 0 14px ${c.hex}99` : "none" }}
+                title={c.label} />
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Current: <span style={{ color: accentColor, fontWeight: 700 }}>{ACCENT_COLORS.find(c => c.hex === accentColor)?.label || "Custom"}</span></div>
+        </Card>
+      </Section>
+
+      {/* ── DATA ── */}
+      <Section title="Data & Backup">
+        <Card>
+          <div style={{ fontSize: 14, color: "#fff", fontWeight: 700, marginBottom: 4 }}>Export / Import</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.6, marginBottom: 14 }}>
+            Back up all your settings, memory, and chat sessions to a JSON file. Restore from a previous backup.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn color={C.cyan} onClick={exportData} style={{ flex: 1 }}>⬇ Export Backup</Btn>
+            <Btn color={C.purple} outline onClick={() => importRef.current?.click()} style={{ flex: 1 }}>⬆ Import</Btn>
+          </div>
+          {importMsg && <div style={{ marginTop: 10, fontSize: 12, color: importMsg.startsWith("✓") ? C.green : C.red || "#f87171", textAlign: "center" }}>{importMsg}</div>}
+          <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={e => importData(e.target.files?.[0])} />
+        </Card>
+      </Section>
 
       {/* ── ABOUT ── */}
       <Section title="About">

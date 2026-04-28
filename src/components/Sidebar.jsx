@@ -169,6 +169,7 @@ export default function Sidebar({
           { id: "agents",    icon: "🤖", label: "AI Agents", color: C.cyan },
           { id: "code",      icon: "⌨️",  label: "Code",      color: "#4ade80" },
           { id: "design",    icon: "✦",  label: "Design",    color: "#b57bee" },
+          { id: "gallery",   icon: "🖼️", label: "Gallery",   color: "#f472b6" },
           { id: "automate",  icon: "⚡", label: "Automate",  color: C.gold },
           { id: "translate", icon: "🌐", label: "Translate", color: "#60c9f8" },
           { id: "navigate",  icon: "📍", label: "Navigate",  color: "#4ade80" },

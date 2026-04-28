@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { C } from "../theme/colors";
 import { callClaudeStream, genImgEnhanced, webSearch } from "../utils/api";
 import { speakFull } from "../utils/voice";
@@ -9,6 +9,17 @@ import Markdown from "../components/Markdown";
 
 const CMD_RE = /\[(IMAGE|LOCATION|OPEN):[^\]]*\]|\[LOCATION\]/g;
 const getSRLang = () => sto.get("aura_lang", "en-US");
+
+// Waveform icon — matches Claude's voice button style
+const WaveIcon = ({ size = 18, color = "currentColor", animate = false }) => (
+  <svg width={size} height={size} viewBox="0 0 22 18" fill={color}>
+    <rect x="0"  y="7"  width="3" height="4"  rx="1.5" style={animate ? { animation: "waveBar1 0.9s ease-in-out infinite" } : {}} />
+    <rect x="4.5" y="4" width="3" height="10" rx="1.5" style={animate ? { animation: "waveBar2 0.9s ease-in-out infinite 0.15s" } : {}} />
+    <rect x="9"  y="0"  width="3" height="18" rx="1.5" style={animate ? { animation: "waveBar3 0.9s ease-in-out infinite 0.3s" } : {}} />
+    <rect x="13.5" y="4" width="3" height="10" rx="1.5" style={animate ? { animation: "waveBar2 0.9s ease-in-out infinite 0.45s" } : {}} />
+    <rect x="19" y="7"  width="3" height="4"  rx="1.5" style={animate ? { animation: "waveBar1 0.9s ease-in-out infinite 0.6s" } : {}} />
+  </svg>
+);
 
 const PLUS_OPTIONS = [
   { id: "camera",   icon: "📷", label: "Camera"       },
@@ -33,10 +44,10 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
   const [msgs, setMsgs]               = useState(() => sto.get("msgs_" + chatSessionId, []));
   const [input, setInput]             = useState("");
   const [loading, setLoading]         = useState(false);
-  const [voiceMode, setVoiceMode]     = useState(false);
-  const [voiceState, setVoiceState]   = useState("idle");
-  const [interimText, setInterimText] = useState("");
-  const [wakeOn, setWakeOn]           = useState(false);
+  const [micActive, setMicActive]     = useState(false);
+  const [callActive, setCallActive]   = useState(false);
+  const [callState, setCallState]     = useState("idle"); // listening | thinking | speaking
+  const [callTranscript, setCallTranscript] = useState("");
   const [copied, setCopied]           = useState(null);
   const [showPlus, setShowPlus]       = useState(false);
   const [attachment, setAttachment]   = useState(null);
@@ -52,25 +63,17 @@ export default function ChatScreen({ auraName, authSession, chatSessionId, onSes
 
   const endRef       = useRef();
   const artifactRef  = useRef(null);
-  const wakeRef      = useRef();
-  const textareaRef  = useRef();
-  const fileInputRef = useRef();
-  const camInputRef  = useRef();
-  const listeningRef  = useRef(false);
-  const voiceModeRef  = useRef(false);
-  const voiceRecRef   = useRef(null);
+  const micRef        = useRef(null);
+  const callRecRef    = useRef(null);
+  const callLoopRef   = useRef(false);
+  const textareaRef   = useRef();
+  const fileInputRef  = useRef();
+  const camInputRef   = useRef();
   const msgsRef       = useRef([]);
-  const micGrantedRef = useRef(false);
 
   useEffect(() => { msgsRef.current = msgs; }, [msgs]);
   useEffect(() => { artifactRef.current = artifact; }, [artifact]);
 
-  // Pre-grant mic on mount so wake word fires hands-free (no tap needed)
-  useEffect(() => {
-    navigator.mediaDevices?.getUserMedia({ audio: true })
-      .then(stream => { micGrantedRef.current = true; stream.getTracks().forEach(t => t.stop()); })
-      .catch(() => {});
-  }, []);
 
   const userProfile = sto.get("user_profile", null);
   const userName    = userProfile?.name || authSession?.name || null;
@@ -140,29 +143,109 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
     ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
   }, [input]);
 
-  const startWake = useCallback(() => {
+  // ── Simple mic button (ChatGPT-style: press → speak → transcribes to input → auto-sends) ──
+  const toggleMic = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("Voice input needs Chrome or Edge."); return; }
+    if (micActive) { micRef.current?.stop(); setMicActive(false); return; }
+    const r = new SR(); r.lang = getSRLang(); r.interimResults = true; r.continuous = false;
+    micRef.current = r;
+    let final = "";
+    r.onstart = () => setMicActive(true);
+    r.onresult = (e) => {
+      const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join("");
+      const got     = Array.from(e.results).filter(x =>  x.isFinal).map(x => x[0].transcript).join("");
+      if (got) final = got;
+      setInput(got || interim);
+    };
+    r.onend = () => {
+      setMicActive(false);
+      if (final.trim()) { const t = final.trim(); setInput(""); setTimeout(() => send(t), 80); }
+    };
+    r.onerror = () => { setMicActive(false); };
+    try { r.start(); } catch { setMicActive(false); }
+  };
+
+  // ── Call mode (phone-call style back-and-forth with AURA) ──
+  const startCall = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("Call mode needs Chrome or Edge."); return; }
+    callLoopRef.current = true;
+    setCallActive(true);
+    setCallState("listening");
+    listenForCall();
+  };
+
+  const endCall = () => {
+    callLoopRef.current = false;
+    setCallActive(false);
+    setCallState("idle");
+    setCallTranscript("");
+    window.speechSynthesis.cancel();
+    callRecRef.current?.stop();
+  };
+
+  const listenForCall = () => {
+    if (!callLoopRef.current) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
-    const r = new SR(); r.continuous = true; r.interimResults = true; r.lang = getSRLang();
-    r.onstart  = () => setWakeOn(true);
-    r.onend    = () => { setWakeOn(false); if (!listeningRef.current) setTimeout(startWake, 500); };
+    setCallState("listening");
+    setCallTranscript("");
+    const r = new SR(); r.lang = getSRLang(); r.interimResults = true;
+    callRecRef.current = r;
+    let captured = "";
     r.onresult = (e) => {
-      const t = Array.from(e.results).map(x => x[0].transcript).join("").toLowerCase();
-      const name = auraName.toLowerCase();
-      const triggered =
-        t.includes(`hey ${name}`) || t.includes(`okay ${name}`) ||
-        t.includes(`ok ${name}`)  || t.includes(name) ||
-        t.includes("let's go")   || t.includes("lets go") ||
-        t.includes("wake up")    || t.includes("hey wake");
-      if (triggered) { r.stop(); setTimeout(activateVoiceMode, 200); }
+      const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join("");
+      const got     = Array.from(e.results).filter(x =>  x.isFinal).map(x => x[0].transcript).join("");
+      setCallTranscript(interim || got);
+      if (got) captured = got;
     };
-    r.onerror = (e) => { setWakeOn(false); if (e.error !== "aborted" && !listeningRef.current) setTimeout(startWake, 600); };
-    wakeRef.current = r;
+    r.onend = () => {
+      if (captured.trim() && callLoopRef.current) callSend(captured.trim());
+      else if (callLoopRef.current) setTimeout(listenForCall, 400);
+    };
+    r.onerror = (e) => {
+      if (e.error === "no-speech" && callLoopRef.current) setTimeout(listenForCall, 300);
+      else if (callLoopRef.current && e.error !== "aborted") setTimeout(listenForCall, 800);
+    };
     try { r.start(); } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auraName]);
+  };
 
-  useEffect(() => { startWake(); return () => wakeRef.current?.stop(); }, [startWake]);
+  const callSend = async (text) => {
+    if (!callLoopRef.current) return;
+    setCallState("thinking");
+    setCallTranscript("");
+    window.speechSynthesis.cancel();
+    const history = [...msgsRef.current, { role: "user", type: "text", content: text, ts: Date.now() }];
+    setMsgs(history);
+    const pid = Date.now();
+    setMsgs(m => [...m, { role: "assistant", type: "text", content: "", id: pid, streaming: true, ts: Date.now() }]);
+    let full = "";
+    try {
+      const trimmed = history.length > 30 ? history.slice(-30) : history;
+      await callClaudeStream(
+        trimmed.map(m => ({ role: m.role, content: m.content })),
+        SYSTEM + "\n\nVOICE MODE: Reply naturally and conversationally. No markdown, no bullet points — speak as if talking. Keep it natural.",
+        (chunk) => { full += chunk; setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x)); }
+      );
+      const clean = full.replace(CMD_RE, "").replace(/\[FOLLOWUPS:[^\]]*\]/i, "").trim();
+      setMsgs(m => {
+        const updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
+        sto.set("msgs_" + chatSessionId, updated.map(({ imagePreview, ...rest }) => rest));
+        const first = updated.find(x => x.role === "user")?.content || "";
+        onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Call", clean.slice(0, 60));
+        return updated;
+      });
+      // Detect dial command
+      const dialMatch = text.match(/(?:dial|call|ring|whatsapp)\s+(\+?[\d\s\-()]{7,})/i);
+      if (dialMatch) { const n = dialMatch[1].replace(/[\s\-()]/g, ""); window.open(`https://wa.me/${n}`, "_blank"); }
+      setCallState("speaking");
+      speakFull(clean, () => { if (callLoopRef.current) setTimeout(listenForCall, 600); });
+    } catch (err) {
+      setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `⚠️ ${err.message}`, streaming: false } : x));
+      if (callLoopRef.current) setTimeout(listenForCall, 1000);
+    }
+  };
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -179,114 +262,6 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgs]);
 
-  const startVoiceLoop = useCallback(() => {
-    if (!voiceModeRef.current) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
-    listeningRef.current = true;
-    setVoiceState("listening");
-    setInterimText("");
-    const r = new SR(); r.lang = getSRLang(); r.interimResults = true;
-    voiceRecRef.current = r;
-    let captured = "";
-    r.onresult = (e) => {
-      const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join("");
-      const final   = Array.from(e.results).filter(x =>  x.isFinal).map(x => x[0].transcript).join("");
-      setInterimText(interim || final);
-      if (final) captured = final;
-    };
-    r.onend = () => {
-      listeningRef.current = false; setInterimText("");
-      if (captured.trim() && voiceModeRef.current) sendVoice(captured.trim());
-      else if (voiceModeRef.current) setTimeout(startVoiceLoop, 400);
-    };
-    r.onerror = (e) => {
-      listeningRef.current = false; setInterimText("");
-      if (e.error === "no-speech" && voiceModeRef.current) setTimeout(startVoiceLoop, 300);
-      else if (e.error === "not-allowed") { voiceModeRef.current = false; setVoiceMode(false); setVoiceState("idle"); }
-      else if (voiceModeRef.current && e.error !== "aborted") setTimeout(startVoiceLoop, 800);
-    };
-    try { r.start(); } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const sendVoice = async (text) => {
-    if (!voiceModeRef.current) return;
-    setVoiceState("thinking");
-    window.speechSynthesis.cancel();
-    const history = [...msgsRef.current, { role: "user", type: "text", content: text }];
-    setMsgs(history);
-    const pid = Date.now();
-    setMsgs(m => [...m, { role: "assistant", type: "text", content: "", id: pid, streaming: true }]);
-    let full = "";
-    try {
-      await callClaudeStream(
-        history.map(m => ({ role: m.role, content: m.content })),
-        SYSTEM + "\n\nVOICE MODE: Max 2-3 sentences. Direct and conversational. No markdown.",
-        (chunk) => { full += chunk; setMsgs(m => m.map(x => x.id === pid ? { ...x, content: full } : x)); }
-      );
-      const clean = full.replace(CMD_RE, "").replace(/\[FOLLOWUPS:[^\]]*\]/i, "").trim();
-      setMsgs(m => {
-        const updated = m.map(x => x.id === pid ? { ...x, content: clean, streaming: false } : x);
-        sto.set("msgs_" + chatSessionId, updated);
-        const first = updated.find(x => x.role === "user")?.content || "";
-        onSessionUpdate?.(chatSessionId, first.slice(0, 48) || "Voice chat", clean.slice(0, 60));
-        return updated;
-      });
-      setVoiceState("speaking");
-      speakFull(clean, () => { if (voiceModeRef.current) { setVoiceState("listening"); setTimeout(startVoiceLoop, 500); } });
-    } catch (e) {
-      setMsgs(m => m.map(x => x.id === pid ? { ...x, content: `⚠️ ${e.message}`, streaming: false } : x));
-      if (voiceModeRef.current) setTimeout(startVoiceLoop, 800);
-    }
-  };
-
-  const activateVoiceMode = async () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Voice needs Chrome or Edge.", id: Date.now(), streaming: false }]); return; }
-    if (!micGrantedRef.current) {
-      try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); micGrantedRef.current = true; s.getTracks().forEach(t => t.stop()); }
-      catch { setMsgs(m => [...m, { role: "assistant", type: "text", content: "⚠️ Mic blocked — allow it in browser settings.", id: Date.now(), streaming: false }]); return; }
-    }
-    wakeRef.current?.stop();
-    voiceModeRef.current = true;
-    setVoiceMode(true);
-    startVoiceLoop();
-  };
-
-  const deactivateVoiceMode = () => {
-    voiceModeRef.current = false;
-    setVoiceMode(false); setVoiceState("idle"); setInterimText("");
-    window.speechSynthesis.cancel();
-    voiceRecRef.current?.stop();
-    listeningRef.current = false;
-    setTimeout(startWake, 400);
-  };
-
-  const startDictation = async () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
-    if (!micGrantedRef.current) {
-      try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); micGrantedRef.current = true; s.getTracks().forEach(t => t.stop()); }
-      catch { return; }
-    }
-    wakeRef.current?.stop();
-    listeningRef.current = true;
-    setVoiceState("dictating");
-    const r = new SR(); r.lang = getSRLang(); r.interimResults = false; r.maxAlternatives = 1;
-    let got = "";
-    r.onresult = (e) => {
-      got = Array.from(e.results).map(x => x[0].transcript).join(" ").trim();
-      setInput(got);
-    };
-    r.onend = () => {
-      listeningRef.current = false; setVoiceState("idle");
-      if (got) { setTimeout(() => textareaRef.current?.focus(), 100); }
-      setTimeout(startWake, 500);
-    };
-    r.onerror = () => { listeningRef.current = false; setVoiceState("idle"); setTimeout(startWake, 500); };
-    try { r.start(); } catch { listeningRef.current = false; setVoiceState("idle"); }
-  };
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -295,7 +270,19 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
       const reader = new FileReader();
       reader.onload = (e) => {
         const data = e.target.result;
-        setAttachment({ type: "image", file, preview: data, base64: data.split(",")[1], mediaType: file.type });
+        // Normalize to JPEG via canvas to avoid media_type mismatches (WebP reported as PNG, etc.)
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const max = 1568;
+          const scale = Math.min(1, max / Math.max(img.width, img.height));
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          const jpeg = canvas.toDataURL("image/jpeg", 0.88);
+          setAttachment({ type: "image", file, preview: jpeg, base64: jpeg.split(",")[1], mediaType: "image/jpeg" });
+        };
+        img.src = data;
       };
       reader.readAsDataURL(file);
     } else if (file.type === "application/pdf") {
@@ -496,7 +483,6 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
   };
 
   const hasMessages = msgs.length > 0;
-  const stateColor  = voiceState === "listening" ? C.green : voiceState === "speaking" ? C.cyan : C.gold;
 
   return (
     <div style={{ display: "flex", flexDirection: "row", height: "100%", minHeight: 0, position: "relative" }}>
@@ -508,27 +494,57 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
       <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.txt,.doc,.docx" style={{ display: "none" }} onChange={e => handleFile(e.target.files?.[0])} />
       <input ref={camInputRef}  type="file" accept="image/*" capture="environment"            style={{ display: "none" }} onChange={e => handleFile(e.target.files?.[0])} />
 
-      {/* ── VOICE CONVERSATION OVERLAY ── */}
-      {voiceMode && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 50, background: `${C.bg}f0`, backdropFilter: "blur(24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24 }}>
-          <div style={{ fontSize: 10, letterSpacing: 4, color: stateColor, textTransform: "uppercase", fontFamily: "'DM Mono',monospace" }}>
-            {voiceState === "listening" ? "Listening…" : voiceState === "thinking" ? "Thinking…" : "Speaking…"}
+      {/* ── VOICE ASSISTANT UI ── */}
+      {callActive && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 50, background: "#03030cf5", backdropFilter: "blur(24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32 }}>
+
+          {/* Status pill */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 16px", borderRadius: 20, background: callState === "listening" ? `${C.green}18` : callState === "thinking" ? `${C.gold}18` : `${C.cyan}18`, border: `1px solid ${callState === "listening" ? C.green + "44" : callState === "thinking" ? C.gold + "44" : C.cyan + "44"}` }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: callState === "listening" ? C.green : callState === "thinking" ? C.gold : C.cyan, animation: "pulse 1s infinite" }} />
+            <span style={{ fontSize: 10, letterSpacing: 2, color: callState === "listening" ? C.green : callState === "thinking" ? C.gold : C.cyan, fontFamily: "'DM Mono',monospace" }}>
+              {callState === "listening" ? "LISTENING" : callState === "thinking" ? "THINKING" : "SPEAKING"}
+            </span>
           </div>
-          <div style={{ position: "relative", width: 140, height: 140, cursor: "pointer" }} onClick={deactivateVoiceMode}>
-            <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${stateColor}33`, animation: "rotate 5s linear infinite" }} />
-            <div style={{ position: "absolute", inset: 12, borderRadius: "50%", border: `1.5px solid ${stateColor}22`, animation: "rotate 9s linear infinite reverse" }} />
-            <div style={{ position: "absolute", inset: 22, borderRadius: "50%", background: `radial-gradient(circle,${stateColor}18,transparent)`, animation: "pulse 1.5s ease-in-out infinite" }} />
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, color: stateColor, filter: `drop-shadow(0 0 18px ${stateColor}88)` }}>◈</div>
+
+          {/* Waveform visualizer */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, height: 80 }}>
+            {[
+              { h: callState === "speaking" ? "40%" : "22%", delay: "0s"    },
+              { h: callState === "speaking" ? "70%" : "45%", delay: "0.12s" },
+              { h: callState === "speaking" ? "100%": "70%", delay: "0.24s" },
+              { h: callState === "speaking" ? "70%" : "45%", delay: "0.36s" },
+              { h: callState === "speaking" ? "40%" : "22%", delay: "0.48s" },
+              { h: callState === "listening" ? "80%" : "28%", delay: "0.1s" },
+              { h: callState === "listening" ? "55%" : "18%", delay: "0.22s"},
+            ].map((bar, i) => (
+              <div key={i} style={{ width: 5, borderRadius: 3, background: callState === "listening" ? C.green : callState === "speaking" ? C.cyan : C.gold, height: bar.h, animation: (callState === "listening" || callState === "speaking") ? `waveBar${i % 3 + 1} 0.8s ease-in-out infinite` : "none", animationDelay: bar.delay, transition: "height 0.3s, background 0.3s", minHeight: 6 }} />
+            ))}
           </div>
-          {interimText && (
-            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", maxWidth: 280, textAlign: "center", lineHeight: 1.6 }}>"{interimText}"</div>
-          )}
-          {voiceState === "speaking" && (() => {
-            const last = [...msgs].reverse().find(m => m.role === "assistant" && m.content);
-            return last ? <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", maxWidth: 280, textAlign: "center", lineHeight: 1.7 }}>{last.content.slice(0, 110)}{last.content.length > 110 ? "…" : ""}</div> : null;
-          })()}
-          <button onClick={deactivateVoiceMode} style={{ background: `${C.red}18`, border: `1.5px solid ${C.red}55`, borderRadius: "50%", width: 52, height: 52, cursor: "pointer", color: C.red, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", letterSpacing: 1 }}>TAP ✕ TO END</div>
+
+          {/* AI name */}
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: 2, marginBottom: 6 }}>{auraName}</div>
+            {callTranscript && (
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", maxWidth: 280, lineHeight: 1.7, fontStyle: "italic" }}>
+                "{callTranscript}"
+              </div>
+            )}
+            {!callTranscript && callState === "speaking" && (() => {
+              const last = [...msgs].reverse().find(m => m.role === "assistant" && m.content && !m.streaming);
+              return last ? <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", maxWidth: 260, lineHeight: 1.7 }}>{last.content.slice(0, 100)}{last.content.length > 100 ? "…" : ""}</div> : null;
+            })()}
+          </div>
+
+          {/* End button — white circle with X, like Claude's app */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <button onClick={endCall}
+              style={{ width: 70, height: 70, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 40px rgba(255,255,255,0.2)", transition: "transform 0.15s, box-shadow 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.07)"; e.currentTarget.style.boxShadow = "0 12px 50px rgba(255,255,255,0.3)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 8px 40px rgba(255,255,255,0.2)"; }}>
+              <WaveIcon size={26} color="#000" />
+            </button>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: 1 }}>TAP TO END</span>
+          </div>
         </div>
       )}
 
@@ -536,11 +552,11 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
         {!hasMessages ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "20px 16px 32px", gap: 16, maxWidth: 560, margin: "0 auto", width: "100%" }}>
-            <div style={{ position: "relative", width: 80, height: 80, cursor: "pointer" }} onClick={activateVoiceMode}>
+            <div style={{ position: "relative", width: 80, height: 80, cursor: "pointer" }} onClick={startCall}>
               <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1.5px solid ${C.cyan}44`, animation: "rotate 8s linear infinite" }} />
               <div style={{ position: "absolute", inset: 5, borderRadius: "50%", border: `1px solid ${C.purple}33`, animation: "rotate 12s linear infinite reverse" }} />
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: C.cyan }}>◈</div>
-              <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: wakeOn ? C.green : "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>{wakeOn ? `SAY "HEY ${auraName.toUpperCase()}"` : "TAP OR SPEAK"}</div>
+              <div style={{ position: "absolute", bottom: -20, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: "rgba(255,255,255,0.22)", whiteSpace: "nowrap", letterSpacing: 1 }}>TAP TO SPEAK</div>
             </div>
             {agentMode ? (
               <div style={{ textAlign: "center", marginTop: 10, width: "100%", maxWidth: 340 }}>
@@ -575,7 +591,7 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
                   <button onClick={() => setAttachment(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 16 }}>✕</button>
                 </div>
               )}
-              <div style={{ display: "flex", gap: 7, alignItems: "flex-end", background: "rgba(255,255,255,0.06)", border: `1.5px solid ${voiceState === "dictating" ? C.green + "77" : input.trim() || attachment ? C.cyan + "66" : C.cyan + "28"}`, borderRadius: 20, padding: "10px 12px", transition: "border-color 0.2s", boxShadow: `0 4px 24px ${C.cyan}12` }}>
+              <div style={{ display: "flex", gap: 7, alignItems: "flex-end", background: "rgba(255,255,255,0.06)", border: `1.5px solid ${micActive ? C.green + "77" : input.trim() || attachment ? C.cyan + "66" : C.cyan + "28"}`, borderRadius: 20, padding: "10px 12px", transition: "border-color 0.2s", boxShadow: `0 4px 24px ${C.cyan}12` }}>
                 <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, position: "relative" }}>
                   {showPlus ? "×" : "+"}
                   {thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.gold }} />}
@@ -583,24 +599,23 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
                 </button>
                 <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  placeholder={searchMode ? "What do you want to search?" : voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
+                  placeholder={searchMode ? "What do you want to search?" : micActive ? "Listening… speak now" : `Ask ${auraName} anything…`}
                   rows={1}
                   style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 14, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
-                <button onClick={voiceMode ? deactivateVoiceMode : startDictation}
-                  style={{ background: voiceMode ? `${C.green}22` : voiceState === "dictating" ? `${C.red}22` : "rgba(255,255,255,0.06)", border: `1px solid ${voiceMode ? C.green + "55" : voiceState === "dictating" ? C.red + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: voiceMode || voiceState === "dictating" ? "pulse 1.2s infinite" : "none" }}>
-                  {voiceMode ? "🟢" : voiceState === "dictating" ? "🔴" : "🎙"}
+                <button onClick={toggleMic}
+                  style={{ background: micActive ? `${C.red}22` : "rgba(255,255,255,0.06)", border: `1px solid ${micActive ? C.red + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: micActive ? "pulse 1.2s infinite" : "none" }}>
+                  🎙
                 </button>
-                <button onClick={() => voiceMode ? activateVoiceMode() : send()} disabled={(!input.trim() && !attachment) || loading}
+                <button onClick={startCall}
+                  style={{ background: callActive ? `${C.cyan}22` : "rgba(255,255,255,0.06)", border: `1px solid ${callActive ? C.cyan + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: callActive ? C.cyan : "rgba(255,255,255,0.5)", animation: callActive ? "pulse 1.4s infinite" : "none" }}
+                  title="Voice assistant">
+                  <WaveIcon size={17} />
+                </button>
+                <button onClick={() => send()} disabled={(!input.trim() && !attachment) || loading}
                   style={{ background: (input.trim() || attachment) && !loading ? `linear-gradient(135deg,${C.cyan},${C.purple})` : "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 38, height: 38, cursor: (input.trim() || attachment) && !loading ? "pointer" : "default", fontSize: 15, color: (input.trim() || attachment) && !loading ? "#000" : "rgba(255,255,255,0.2)", fontWeight: 800, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
                   ▶
                 </button>
               </div>
-              {wakeOn && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 7 }}>
-                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
-                  <span style={{ fontSize: 9, color: C.green, letterSpacing: 1 }}>SAY "HEY {auraName.toUpperCase()}"</span>
-                </div>
-              )}
             </div>
           </div>
         ) : (
@@ -778,7 +793,7 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
           </div>
         )}
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
-          <div style={{ display: "flex", gap: 7, alignItems: "flex-end", background: "rgba(255,255,255,0.05)", border: `1.5px solid ${voiceState === "dictating" ? C.green + "77" : input.trim() || attachment ? C.cyan + "55" : C.cyan + "18"}`, borderRadius: 20, padding: "8px 10px", transition: "border-color 0.2s" }}>
+          <div style={{ display: "flex", gap: 7, alignItems: "flex-end", background: "rgba(255,255,255,0.05)", border: `1.5px solid ${micActive ? C.green + "77" : input.trim() || attachment ? C.cyan + "55" : C.cyan + "18"}`, borderRadius: 20, padding: "8px 10px", transition: "border-color 0.2s" }}>
             <button onClick={() => setShowPlus(s => !s)} style={{ background: showPlus ? `${C.cyan}18` : "rgba(255,255,255,0.06)", border: `1px solid ${showPlus ? C.cyan + "44" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 20, color: showPlus ? C.cyan : "rgba(255,255,255,0.5)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, position: "relative" }}>
               {showPlus ? "×" : "+"}
               {thinkMode && <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", background: C.gold }} />}
@@ -786,24 +801,23 @@ ${msgs.filter(m => m.type !== "image").map(m => m.role === "user"
             </button>
             <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={searchMode ? "What do you want to search?" : voiceState === "dictating" ? "Listening… speak now" : `Ask ${auraName} anything…`}
+              placeholder={searchMode ? "What do you want to search?" : micActive ? "Listening… speak now" : `Ask ${auraName} anything…`}
               rows={1}
               style={{ flex: 1, background: "none", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "'Inter','DM Mono',sans-serif", resize: "none", outline: "none", lineHeight: 1.6, maxHeight: 140, overflowY: "auto", paddingTop: 2 }} />
-            <button onClick={voiceMode ? deactivateVoiceMode : startDictation}
-              style={{ background: voiceMode ? `${C.green}22` : voiceState === "dictating" ? `${C.red}22` : "rgba(255,255,255,0.06)", border: `1px solid ${voiceMode ? C.green + "55" : voiceState === "dictating" ? C.red + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: voiceMode || voiceState === "dictating" ? "pulse 1.2s infinite" : "none" }}>
-              {voiceMode ? "🟢" : voiceState === "dictating" ? "🔴" : "🎙"}
+            <button onClick={toggleMic}
+              style={{ background: micActive ? `${C.red}22` : "rgba(255,255,255,0.06)", border: `1px solid ${micActive ? C.red + "55" : "rgba(255,255,255,0.09)"}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: micActive ? "pulse 1.2s infinite" : "none" }}>
+              🎙
             </button>
-            <button onClick={() => voiceMode ? activateVoiceMode() : send()} disabled={(!input.trim() && !attachment) || loading}
+            <button onClick={startCall}
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+              title="Call AURA">
+              📞
+            </button>
+            <button onClick={() => send()} disabled={(!input.trim() && !attachment) || loading}
               style={{ background: (input.trim() || attachment) && !loading ? `linear-gradient(135deg,${C.cyan},${C.purple})` : "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 36, height: 36, cursor: (input.trim() || attachment) && !loading ? "pointer" : "default", fontSize: 15, color: (input.trim() || attachment) && !loading ? "#000" : "rgba(255,255,255,0.2)", fontWeight: 800, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
               ▶
             </button>
           </div>
-          {wakeOn && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 5 }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
-              <span style={{ fontSize: 9, color: C.green, letterSpacing: 1 }}>SAY "HEY {auraName.toUpperCase()}"</span>
-            </div>
-          )}
         </div>
       </div>}
 
