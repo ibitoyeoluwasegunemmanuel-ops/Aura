@@ -270,7 +270,19 @@ REACT RULE: If asked specifically for a React component, output a \`\`\`jsx code
       const reader = new FileReader();
       reader.onload = (e) => {
         const data = e.target.result;
-        setAttachment({ type: "image", file, preview: data, base64: data.split(",")[1], mediaType: file.type });
+        // Normalize to JPEG via canvas to avoid media_type mismatches (WebP reported as PNG, etc.)
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const max = 1568;
+          const scale = Math.min(1, max / Math.max(img.width, img.height));
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          const jpeg = canvas.toDataURL("image/jpeg", 0.88);
+          setAttachment({ type: "image", file, preview: jpeg, base64: jpeg.split(",")[1], mediaType: "image/jpeg" });
+        };
+        img.src = data;
       };
       reader.readAsDataURL(file);
     } else if (file.type === "application/pdf") {

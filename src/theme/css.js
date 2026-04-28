@@ -22,5 +22,5 @@ export const CSS = `
   textarea::placeholder,input::placeholder{color:rgba(255,255,255,0.18);}
   select option{background:#111;color:#fff;}
   .bottom-nav{display:flex;}
-  @media(min-width:768px){.bottom-nav{display:none!important;}}
+  @media(min-width:768px){.bottom-nav{display:none!important;}.main-content{padding-bottom:0!important;}}
 `;

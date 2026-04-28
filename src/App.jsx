@@ -307,8 +307,8 @@ export default function AuraOS() {
           <button onClick={() => setMinimized(true)} style={{ background: theme.hover, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: theme.textFaint, lineHeight: 1 }}>—</button>
         </div>
 
-        {/* Screen content */}
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", paddingBottom: "env(safe-area-inset-bottom)" }}>
+        {/* Screen content — paddingBottom accounts for mobile bottom nav (56px) + safe area */}
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", paddingBottom: "calc(56px + env(safe-area-inset-bottom))" }} className="main-content">
           {view === "chat" && (
             <ChatScreen
               key={activeSid}
